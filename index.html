@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reisregistratie</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --paper:#F2EFE9;
+  --paper-raised:#FBFAF7;
+  --ink:#1F2A24;
+  --ink-soft:#4B564E;
+  --line:#C9C2B4;
+  --line-soft:#DCD6C8;
+  --stamp:#8A3324;
+  --stamp-soft:#C9673D;
+  --forest:#2F4B3C;
+  --forest-soft:#5A7566;
+  --gold:#A9822E;
+  --ok-bg:#E4EBE1;
+  --ok-ink:#2F4B3C;
+  --dienst-bg:#EFE2D8;
+  --dienst-ink:#8A3324;
+  --thuis-bg:#E1E7EA;
+  --thuis-ink:#385166;
+  --woon-bg:#E9E4D4;
+  --woon-ink:#5A4D2A;
+  --vrij-bg:#E3DCEC;
+  --vrij-ink:#5B3E7A;
+  --collectief-bg:#F0DCE3;
+  --collectief-ink:#8A2F52;
+  --overig-bg:#DCE8E1;
+  --overig-ink:#2F6B4A;
+  --shadow: 0 1px 2px rgba(31,42,36,0.06), 0 4px 14px rgba(31,42,36,0.06);
+  --radius: 3px;
+  font-family:'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);}
+body{
+  min-height:100vh;
+  background-image:
+    linear-gradient(var(--paper),var(--paper)),
+    repeating-linear-gradient(0deg, rgba(31,42,36,0.02) 0px, rgba(31,42,36,0.02) 1px, transparent 1px, transparent 3px);
+}
+@font-face{
+  font-family:'Fraunces-fallback';
+  src:local('Georgia');
+}
+h1,h2,h3,.serif{
+  font-family:'Iowan Old Style','Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 22px 80px;}
+
+/* ===== Header / masthead ===== */
+.masthead{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  border-bottom:2px solid var(--ink);
+  padding-bottom:14px;margin-bottom:6px;
+}
+.masthead-left{display:flex;flex-direction:column;gap:2px;}
+.eyebrow{
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--forest-soft);
+  font-weight:600;
+}
+.masthead h1{
+  font-size:34px;margin:0;font-weight:600;letter-spacing:-0.01em;color:var(--ink);
+}
+.masthead-sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+.masthead-right{text-align:right;font-size:12px;color:var(--ink-soft);line-height:1.5;}
+.masthead-right b{color:var(--ink);font-weight:600;}
+
+.ruler{height:1px;background:repeating-linear-gradient(to right, var(--line) 0, var(--line) 5px, transparent 5px, transparent 9px);margin:10px 0 22px;}
+
+/* ===== Toolbar ===== */
+.toolbar{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  margin-bottom:18px;
+}
+.toolbar-group{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.month-nav{display:flex;align-items:center;gap:10px;background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;box-shadow:var(--shadow);}
+.month-nav button{
+  border:none;background:transparent;color:var(--forest);cursor:pointer;font-size:16px;
+  width:26px;height:26px;border-radius:2px;display:flex;align-items:center;justify-content:center;
+}
+.month-nav button:hover{background:var(--ok-bg);}
+.month-label{font-family:'Iowan Old Style',Georgia,serif;font-size:16px;min-width:150px;text-align:center;font-weight:600;}
+
+.declared-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--ok-bg);color:var(--ok-ink);
+  font-size:11.5px;font-weight:700;letter-spacing:.02em;
+  padding:6px 12px;border-radius:14px;border:1px solid var(--forest-soft);
+  white-space:nowrap;cursor:pointer;
+}
+.declared-badge:hover{background:#D6E2D1;}
+
+.cal.declared{position:relative;}
+.cal.declared::after{
+  content:"GEDECLAREERD";
+  position:absolute;top:14px;right:18px;
+  font-family:'Iowan Old Style',Georgia,serif;
+  font-size:13px;font-weight:700;letter-spacing:.12em;
+  color:var(--forest-soft);
+  border:1.5px solid var(--forest-soft);
+  padding:4px 12px;border-radius:3px;
+  transform:rotate(-4deg);
+  opacity:.55;
+  pointer-events:none;
+  z-index:5;
+  background:rgba(251,250,247,0.85);
+}
+.cal.declared .cal-head{opacity:.92;}
+
+.btn{
+  font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.01em;
+  padding:8px 14px;border-radius:var(--radius);cursor:pointer;border:1px solid transparent;
+  display:inline-flex;align-items:center;gap:6px;transition:transform .06s ease, box-shadow .15s ease;
+}
+.btn:active{transform:translateY(1px);}
+.btn-primary{background:var(--forest);color:#fff;border-color:var(--forest);box-shadow:var(--shadow);}
+.btn-primary:hover{background:#26392f;}
+.btn-stamp{background:var(--stamp);color:#fff;border-color:var(--stamp);box-shadow:var(--shadow);}
+.btn-stamp:hover{background:#722a1d;}
+.btn-outline{background:var(--paper-raised);color:var(--ink);border-color:var(--line);}
+.btn-outline:hover{border-color:var(--ink-soft);}
+.btn-ghost{background:transparent;color:var(--ink-soft);border-color:transparent;}
+.btn-ghost:hover{color:var(--ink);text-decoration:underline;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ===== Summary strip ===== */
+.summary-strip{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:22px;
+  box-shadow:var(--shadow);
+}
+.summary-cell{background:var(--paper-raised);padding:14px 16px;}
+.summary-cell .num{font-family:'Iowan Old Style',Georgia,serif;font-size:26px;font-weight:600;line-height:1;}
+.summary-cell .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-top:5px;}
+.summary-cell.woon .num{color:var(--woon-ink);}
+.summary-cell.dienst .num{color:var(--dienst-ink);}
+.summary-cell.thuis .num{color:var(--thuis-ink);}
+.summary-cell.km .num{color:var(--forest);}
+
+/* ===== Calendar ===== */
+.cal{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--paper-raised);box-shadow:var(--shadow);}
+.cal-head{
+  display:grid;grid-template-columns:64px repeat(7,1fr);
+  background:var(--ink);color:var(--paper);
+}
+.cal-head div{padding:9px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;text-align:center;font-weight:600;}
+.cal-head .wk-col{background:#161f1a;}
+.cal-week-row{display:grid;grid-template-columns:64px repeat(7,1fr);border-top:1px solid var(--line-soft);}
+.cal-week-row:first-child{border-top:none;}
+.wk-num{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--paper);border-right:1px solid var(--line-soft);color:var(--ink-soft);
+  font-size:11px;letter-spacing:.03em;gap:1px;padding:4px 2px;
+}
+.wk-num b{font-family:'Iowan Old Style',Georgia,serif;font-size:17px;color:var(--forest);font-weight:600;}
+.wk-km{
+  font-size:10px;font-weight:700;color:var(--forest-soft);letter-spacing:0;
+  background:var(--ok-bg);padding:1px 6px;border-radius:8px;margin-top:2px;white-space:nowrap;
+}
+.wk-km.zero{background:transparent;color:var(--line);font-weight:500;}
+.day-cell{
+  border-right:1px solid var(--line-soft);min-height:92px;padding:6px 7px 7px;position:relative;cursor:pointer;
+  display:flex;flex-direction:column;gap:4px;transition:background .1s ease;
+}
+.day-cell:last-child{border-right:none;}
+.day-cell:hover{background:#EEEAE0;}
+.day-cell.other-month{background:repeating-linear-gradient(135deg, transparent 0 8px, rgba(31,42,36,0.02) 8px 9px);}
+.day-cell.other-month .day-num{color:#B9B2A2;}
+.day-cell.weekend{background:#EAE6DA;}
+.day-cell.holiday{background:#F3ECDD;}
+.day-cell.holiday .day-num{color:var(--gold);}
+.holiday-tag{
+  font-size:9.5px;color:var(--gold);font-weight:600;line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+  font-style:italic;
+}
+.day-cell.today .day-num{
+  background:var(--stamp);color:#fff;border-radius:50%;width:20px;height:20px;
+  display:flex;align-items:center;justify-content:center;
+}
+.day-num{font-size:12px;font-weight:600;color:var(--ink-soft);}
+.day-tag{
+  font-size:10px;padding:2px 6px;border-radius:9px;font-weight:600;letter-spacing:.01em;
+  line-height:1.5;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.day-tag.woon{background:var(--woon-bg);color:var(--woon-ink);}
+.day-tag.dienst{background:var(--dienst-bg);color:var(--dienst-ink);}
+.day-tag.thuis{background:var(--thuis-bg);color:var(--thuis-ink);}
+.day-tag.vrij{background:var(--vrij-bg);color:var(--vrij-ink);}
+.day-tag.collectief{background:var(--collectief-bg);color:var(--collectief-ink);}
+.day-tag.overig{background:var(--overig-bg);color:var(--overig-ink);}
+.day-note-dot{
+  width:5px;height:5px;border-radius:50%;background:var(--gold);position:absolute;top:8px;right:8px;
+}
+
+/* ===== Legend ===== */
+.legend{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--ink-soft);}
+.legend-item{display:flex;align-items:center;gap:6px;}
+.legend-swatch{width:11px;height:11px;border-radius:3px;}
+.legend-swatch.woon{background:var(--woon-ink);}
+.legend-swatch.dienst{background:var(--dienst-ink);}
+.legend-swatch.thuis{background:var(--thuis-ink);}
+.legend-swatch.vrij{background:var(--vrij-ink);}
+.legend-swatch.collectief{background:var(--collectief-ink);}
+.legend-swatch.overig{background:var(--overig-ink);}
+
+/* ===== Modal ===== */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(31,42,36,0.42);backdrop-filter:blur(1.5px);
+  display:none;align-items:center;justify-content:center;z-index:50;padding:20px;
+}
+.modal-backdrop.open{display:flex;}
+.modal{
+  background:var(--paper-raised);border-radius:4px;width:100%;max-width:460px;
+  box-shadow:0 12px 40px rgba(31,42,36,0.25);border:1px solid var(--line);
+  max-height:88vh;overflow-y:auto;
+}
+.modal-header{
+  padding:18px 22px 14px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:flex-start;
+}
+.modal-header h2{margin:0;font-size:19px;font-weight:600;}
+.modal-header .sub{font-size:12px;color:var(--ink-soft);margin-top:3px;}
+.modal-close{background:none;border:none;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1;padding:2px 4px;}
+.modal-close:hover{color:var(--ink);}
+.modal-body{padding:18px 22px;}
+.field{margin-bottom:15px;}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;margin-bottom:6px;}
+.type-select{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.type-option{
+  border:1.5px solid var(--line);border-radius:var(--radius);padding:9px 6px;text-align:center;
+  cursor:pointer;font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--paper);transition:all .12s ease;
+}
+.type-option:hover{border-color:var(--ink-soft);}
+.type-option.active.woon{background:var(--woon-bg);color:var(--woon-ink);border-color:var(--woon-ink);}
+.type-option.active.dienst{background:var(--dienst-bg);color:var(--dienst-ink);border-color:var(--dienst-ink);}
+.type-option.active.thuis{background:var(--thuis-bg);color:var(--thuis-ink);border-color:var(--thuis-ink);}
+.type-option.active.vrij{background:var(--vrij-bg);color:var(--vrij-ink);border-color:var(--vrij-ink);}
+.type-option.active.collectief{background:var(--collectief-bg);color:var(--collectief-ink);border-color:var(--collectief-ink);}
+.type-option.active.overig{background:var(--overig-bg);color:var(--overig-ink);border-color:var(--overig-ink);}
+input[type=text],input[type=number],input[type=date],textarea,select{
+  width:100%;font-family:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);
+  border-radius:3px;background:var(--paper);color:var(--ink);
+}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--forest-soft);outline-offset:1px;border-color:var(--forest);}
+textarea{resize:vertical;min-height:64px;font-family:inherit;}
+.field-row{display:flex;gap:10px;}
+.field-row .field{flex:1;}
+.hint{font-size:11px;color:var(--ink-soft);margin-top:4px;}
+
+.existing-label{
+  display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);
+  font-weight:600;margin-bottom:8px;
+}
+#existingEntriesBlock{margin-bottom:16px;}
+.existing-entry{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);
+  border-radius:3px;background:var(--paper);margin-bottom:7px;cursor:pointer;transition:border-color .12s ease;
+}
+.existing-entry:hover{border-color:var(--forest-soft);}
+.existing-entry .existing-tag{
+  font-size:10.5px;padding:3px 8px;border-radius:9px;font-weight:600;flex-shrink:0;
+}
+.existing-entry .existing-tag.woon{background:var(--woon-bg);color:var(--woon-ink);}
+.existing-entry .existing-tag.dienst{background:var(--dienst-bg);color:var(--dienst-ink);}
+.existing-entry .existing-tag.thuis{background:var(--thuis-bg);color:var(--thuis-ink);}
+.existing-entry .existing-tag.vrij{background:var(--vrij-bg);color:var(--vrij-ink);}
+.existing-entry .existing-tag.collectief{background:var(--collectief-bg);color:var(--collectief-ink);}
+.existing-entry .existing-tag.overig{background:var(--overig-bg);color:var(--overig-ink);}
+.existing-entry .existing-detail{flex:1;font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.existing-entry .existing-remove{
+  background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:16px;line-height:1;
+  padding:3px 6px;border-radius:3px;flex-shrink:0;
+}
+.existing-entry .existing-remove:hover{color:var(--stamp);background:var(--dienst-bg);}
+.existing-entry .existing-remove.confirming{
+  background:var(--stamp);color:#fff;font-size:11px;font-weight:700;padding:5px 9px;
+}
+.existing-entry .existing-remove.confirming:hover{background:#722a1d;color:#fff;}
+
+.entry-form-divider{
+  display:flex;align-items:center;gap:10px;margin:4px 0 16px;
+  font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--forest-soft);font-weight:600;
+}
+.entry-form-divider::before, .entry-form-divider::after{
+  content:"";flex:1;height:1px;background:var(--line-soft);
+}
+.modal-footer{
+  padding:14px 22px 20px;display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line-soft);
+}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);}
+.checkbox-row input{width:auto;}
+
+/* ===== Export panel ===== */
+.export-panel{
+  margin-top:26px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper-raised);
+  box-shadow:var(--shadow);padding:18px 20px;
+}
+.export-panel h3{margin:0 0 3px;font-size:15px;}
+.export-panel .sub{font-size:12px;color:var(--ink-soft);margin-bottom:14px;}
+.export-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.range-select{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-soft);}
+.range-select select{width:auto;padding:7px 9px;font-size:12.5px;}
+
+/* ===== Empty / footer ===== */
+.footnote{margin-top:22px;font-size:11.5px;color:var(--ink-soft);text-align:center;}
+.footnote .stamp-word{color:var(--stamp);font-weight:700;letter-spacing:.03em;}
+
+@media (max-width:760px){
+  .masthead{flex-direction:column;align-items:flex-start;gap:8px;}
+  .masthead-right{text-align:left;}
+  .summary-strip{grid-template-columns:repeat(2,1fr);}
+  .cal-head{grid-template-columns:42px repeat(7,1fr);}
+  .cal-week-row{grid-template-columns:42px repeat(7,1fr);}
+  .day-cell{min-height:70px;padding:4px 4px 5px;}
+  .day-tag{font-size:8.5px;padding:1px 4px;}
+  .wk-num b{font-size:14px;}
+  .wk-km{font-size:8.5px;padding:1px 4px;}
+  .toolbar{flex-direction:column;align-items:stretch;}
+  .toolbar-group{justify-content:center;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="masthead-left">
+      <span class="eyebrow">Registratie &middot; Reizen &amp; Werkplek</span>
+      <h1>Reisregistratie</h1>
+      <div class="masthead-sub">Woon-werkverkeer, dienstreizen en thuiswerkdagen</div>
+    </div>
+    <div class="masthead-right" id="ytdSummary">
+      <b id="ytdKm">0</b> km geregistreerd in <b id="ytdYear">—</b>
+    </div>
+  </div>
+  <div class="ruler"></div>
+
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <div class="month-nav">
+        <button id="prevMonth" title="Vorige maand" aria-label="Vorige maand">&#8249;</button>
+        <span class="month-label" id="monthLabel">—</span>
+        <button id="nextMonth" title="Volgende maand" aria-label="Volgende maand">&#8250;</button>
+      </div>
+      <span class="declared-badge" id="declaredBadge" style="display:none;" title="Klik om declaratie ongedaan te maken">&#10003; Gedeclareerd</span>
+      <button class="btn btn-outline" id="todayBtn">Vandaag</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="btn btn-outline" id="declareBtn">Markeer maand als gedeclareerd</button>
+      <button class="btn btn-outline" id="bulkAddBtn">+ Meerdere dagen</button>
+      <button class="btn btn-stamp" id="addEntryBtn">+ Registratie toevoegen</button>
+    </div>
+  </div>
+
+  <div class="summary-strip" id="summaryStrip">
+    <div class="summary-cell woon">
+      <div class="num" id="sumWoon">0</div>
+      <div class="lbl">Woon-werkdagen</div>
+    </div>
+    <div class="summary-cell dienst">
+      <div class="num" id="sumDienst">0</div>
+      <div class="lbl">Dienstreizen</div>
+    </div>
+    <div class="summary-cell thuis">
+      <div class="num" id="sumThuis">0</div>
+      <div class="lbl">Thuiswerkdagen</div>
+    </div>
+    <div class="summary-cell km">
+      <div class="num" id="sumKm">0</div>
+      <div class="lbl">Kilometers deze maand</div>
+    </div>
+  </div>
+
+  <div class="cal" id="calendar">
+    <div class="cal-head">
+      <div class="wk-col">Wk</div>
+      <div>Ma</div><div>Di</div><div>Wo</div><div>Do</div><div>Vr</div><div>Za</div><div>Zo</div>
+    </div>
+    <div id="calBody"></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-swatch woon"></span> Woon-werkverkeer</div>
+    <div class="legend-item"><span class="legend-swatch dienst"></span> Dienstreis</div>
+    <div class="legend-item"><span class="legend-swatch thuis"></span> Thuiswerkdag</div>
+    <div class="legend-item"><span class="legend-swatch vrij"></span> Vrije dag</div>
+    <div class="legend-item"><span class="legend-swatch collectief"></span> Collectieve dag</div>
+    <div class="legend-item"><span class="legend-swatch overig"></span> Overig</div>
+    <div class="legend-item"><span class="legend-swatch" style="background:var(--gold);"></span> Nationale feestdag</div>
+    <div class="legend-item">&middot; klik op een dag om te registreren</div>
+    <div class="legend-item">&middot; gebruik "Markeer maand als gedeclareerd" om bij te houden welke maanden al zijn ingediend</div>
+  </div>
+
+  <div class="export-panel">
+    <h3>Exporteren</h3>
+    <div class="sub">Download je reisregistratie als Excel-overzicht of PDF-rapport, inclusief datum en weeknummer.</div>
+    <div class="export-row">
+      <div class="range-select">
+        <span>Periode:</span>
+        <select id="exportRange">
+          <option value="month">Deze maand</option>
+          <option value="year">Dit jaar (per maand gegroepeerd)</option>
+          <option value="all">Alle registraties (per maand gegroepeerd)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="exportExcelBtn">&#8681; Excel (.xlsx)</button>
+      <button class="btn btn-primary" id="exportPdfBtn">&#8681; PDF</button>
+    </div>
+  </div>
+
+  <div class="footnote">Gegevens worden automatisch gesynchroniseerd tussen je apparaten. <span class="stamp-word">Reisregistratie</span> &middot; eigen bijhouding, geen officieel document.</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modalTitle">Registratie toevoegen</h2>
+        <div class="sub" id="modalSub">—</div>
+      </div>
+      <button class="modal-close" id="modalCloseBtn" aria-label="Sluiten">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Datum</label>
+        <input type="date" id="entryDate">
+      </div>
+
+      <div id="existingEntriesBlock" style="display:none;">
+        <label class="existing-label">Al geregistreerd op deze dag</label>
+        <div id="existingEntriesList"></div>
+      </div>
+
+      <div class="entry-form-divider" id="entryFormDivider" style="display:none;">
+        <span>Nieuwe registratie toevoegen</span>
+      </div>
+
+      <div class="field">
+        <label>Type</label>
+        <div class="type-select" id="typeSelect">
+          <div class="type-option woon" data-type="woon">Woon-werk</div>
+          <div class="type-option dienst" data-type="dienst">Dienstreis</div>
+          <div class="type-option thuis" data-type="thuis">Thuiswerk</div>
+          <div class="type-option vrij" data-type="vrij">Vrije dag</div>
+          <div class="type-option collectief" data-type="collectief">Collectieve dag</div>
+          <div class="type-option overig" data-type="overig">Overig</div>
+        </div>
+      </div>
+      <div class="field" id="overigLabelField" style="display:none;">
+        <label>Omschrijving</label>
+        <input type="text" id="entryOverigLabel" placeholder="Bijv. Cursusdag, Bijzonder verlof, Zorgverlof">
+      </div>
+      <div class="field-row" id="kmFieldRow">
+        <div class="field">
+          <label>Kilometers (enkele reis)</label>
+          <input type="number" id="entryKm" min="0" step="0.1" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Retour?</label>
+          <select id="entryRetour">
+            <option value="1">Ja, heen en terug</option>
+            <option value="0">Nee, enkele reis</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" id="bestemmingField">
+        <label>Bestemming</label>
+        <input type="text" id="entryBestemming" placeholder="Bijv. locatiebezoek Vught-Noord">
+      </div>
+      <div class="field">
+        <label>Opmerkingen</label>
+        <textarea id="entryOpmerking" placeholder="Bijv. aanleiding, referentie zaaknummer, bijzonderheden"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="cancelFormBtn" style="display:none;">Annuleer bewerken</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-outline" id="cancelEntryBtn">Sluiten</button>
+      <button class="btn btn-stamp" id="saveEntryBtn">Toevoegen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk-invoer modal -->
+<div class="modal-backdrop" id="bulkModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2>Meerdere dagen toevoegen</h2>
+        <div class="sub">Registreer hetzelfde type voor een reeks aaneengesloten dagen ineens</div>
+      </div>
+      <button class="modal-close" id="bulkModalCloseBtn" aria-label="Sluiten">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field">
+          <label>Van datum</label>
+          <input type="date" id="bulkStartDate">
+        </div>
+        <div class="field">
+          <label>Tot en met datum</label>
+          <input type="date" id="bulkEndDate">
+        </div>
+      </div>
+      <div class="field">
+        <label class="checkbox-row"><input type="checkbox" id="bulkSkipWeekends" checked> Weekenden overslaan</label>
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <div class="type-select" id="bulkTypeSelect">
+          <div class="type-option woon" data-type="woon">Woon-werk</div>
+          <div class="type-option dienst" data-type="dienst">Dienstreis</div>
+          <div class="type-option thuis" data-type="thuis">Thuiswerk</div>
+          <div class="type-option vrij" data-type="vrij">Vrije dag</div>
+          <div class="type-option collectief" data-type="collectief">Collectieve dag</div>
+          <div class="type-option overig" data-type="overig">Overig</div>
+        </div>
+      </div>
+      <div class="field" id="bulkOverigLabelField" style="display:none;">
+        <label>Omschrijving</label>
+        <input type="text" id="bulkOverigLabel" placeholder="Bijv. Cursusdag, Bijzonder verlof, Zorgverlof">
+      </div>
+      <div class="field-row" id="bulkKmFieldRow">
+        <div class="field">
+          <label>Kilometers (enkele reis)</label>
+          <input type="number" id="bulkKm" min="0" step="0.1" placeholder="0">
+        </div>
+        <div class="field">
+          <label>Retour?</label>
+          <select id="bulkRetour">
+            <option value="1">Ja, heen en terug</option>
+            <option value="0">Nee, enkele reis</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" id="bulkBestemmingField">
+        <label>Bestemming</label>
+        <input type="text" id="bulkBestemming" placeholder="Bijv. locatiebezoek Vught-Noord">
+      </div>
+      <div class="field">
+        <label>Opmerkingen</label>
+        <textarea id="bulkOpmerking" placeholder="Geldt voor alle geselecteerde dagen"></textarea>
+      </div>
+      <div class="hint" id="bulkPreview"></div>
+    </div>
+    <div class="modal-footer">
+      <div style="flex:1"></div>
+      <button class="btn btn-outline" id="bulkCancelBtn">Annuleren</button>
+      <button class="btn btn-stamp" id="bulkSaveBtn">Dagen toevoegen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============ Data laag: cross-device sync via Netlify Blobs ============ */
+/*
+  Werking:
+  - Alle data (entries + declaredMonths) staat in één record op de server (Netlify Function -> Netlify Blob).
+  - localStorage blijft bestaan als lokale cache: de app laadt direct (ook offline) met de laatst bekende data
+    en synchroniseert op de achtergrond met de server.
+  - Geen wachtwoord: bedoeld voor persoonlijk, single-user gebruik. Iedereen met de site-URL kan de data
+    lezen/wijzigen, dus deel de URL niet breder dan gewenst.
+*/
+const STORAGE_KEY = "reisregistratie_entries_v1";
+const DECLARED_KEY = "reisregistratie_declared_v1";
+const API_URL = "/.netlify/functions/data";
+
+function migrateEntries(parsed){
+  const migrated = {};
+  Object.entries(parsed || {}).forEach(([key, val]) => {
+    migrated[key] = Array.isArray(val) ? val : [val];
+  });
+  return migrated;
+}
+
+function loadEntriesLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return migrateEntries(raw ? JSON.parse(raw) : {});
+  }catch(e){ return {}; }
+}
+function saveEntriesLocal(entries){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+function loadDeclaredLocal(){
+  try{
+    const raw = localStorage.getItem(DECLARED_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+function saveDeclaredLocal(declared){
+  localStorage.setItem(DECLARED_KEY, JSON.stringify(declared));
+}
+
+let entries = loadEntriesLocal(); // key = "YYYY-MM-DD" -> [ {type, km, retour, bestemming, opmerking}, ... ]
+let declaredMonths = loadDeclaredLocal(); // key = "YYYY-MM" -> true
+
+/* ---- Sync status indicator ---- */
+const syncIndicator = document.createElement("div");
+syncIndicator.id = "syncIndicator";
+syncIndicator.style.cssText = "position:fixed;bottom:14px;right:16px;font-size:11px;font-family:'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:14px;background:var(--paper-raised,#FBFAF7);color:var(--ink-soft,#4B564E);border:1px solid var(--line,#C9C2B4);box-shadow:0 1px 2px rgba(31,42,36,0.08);z-index:100;display:none;transition:opacity .2s ease;";
+document.body.appendChild(syncIndicator);
+function setSyncStatus(state){
+  // state: "syncing" | "synced" | "offline" | "error"
+  const map = {
+    syncing: { text: "Synchroniseren…", show: true },
+    synced:  { text: "\u2713 Gesynchroniseerd", show: true, fade: true },
+    offline: { text: "Offline — lokale wijzigingen worden bewaard", show: true },
+    error:   { text: "Synchronisatie mislukt — lokale kopie actief", show: true }
+  };
+  const cfg = map[state];
+  if(!cfg) return;
+  syncIndicator.textContent = cfg.text;
+  syncIndicator.style.display = "block";
+  syncIndicator.style.opacity = "1";
+  if(cfg.fade){
+    clearTimeout(setSyncStatus._t);
+    setSyncStatus._t = setTimeout(() => { syncIndicator.style.opacity = "0"; }, 1800);
+  }
+}
+
+/* ---- Server sync ---- */
+let syncInFlight = false;
+let pendingSync = false;
+
+async function fetchServerData(){
+  const res = await fetch(API_URL, { method: "GET" });
+  if(!res.ok){ throw new Error("server error " + res.status); }
+  return res.json();
+}
+
+async function pushServerData(){
+  const res = await fetch(API_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entries, declaredMonths, updatedAt: Date.now() })
+  });
+  if(!res.ok){ throw new Error("server error " + res.status); }
+}
+
+async function syncToServer(){
+  if(syncInFlight){ pendingSync = true; return; }
+  syncInFlight = true;
+  setSyncStatus("syncing");
+  try{
+    await pushServerData();
+    setSyncStatus("synced");
+  }catch(err){
+    console.error("Sync (push) mislukt:", err);
+    setSyncStatus(navigator.onLine ? "error" : "offline");
+  }finally{
+    syncInFlight = false;
+    if(pendingSync){ pendingSync = false; syncToServer(); }
+  }
+}
+
+async function initialSyncFromServer(){
+  setSyncStatus("syncing");
+  try{
+    const data = await fetchServerData();
+    if(data && (data.entries || data.declaredMonths) && Object.keys(data.entries || {}).length + Object.keys(data.declaredMonths || {}).length > 0){
+      entries = migrateEntries(data.entries || {});
+      declaredMonths = data.declaredMonths || {};
+      saveEntriesLocal(entries);
+      saveDeclaredLocal(declaredMonths);
+      renderCalendar();
+      updateDeclaredUI();
+    } else {
+      // Nog niets op de server: stuur de lokale (mogelijk lege) dataset als startpunt
+      await pushServerData();
+    }
+    setSyncStatus("synced");
+  }catch(err){
+    console.error("Initiële sync mislukt:", err);
+    setSyncStatus(navigator.onLine ? "error" : "offline");
+  }
+}
+
+function saveEntries(newEntries){
+  entries = newEntries;
+  saveEntriesLocal(entries);
+  syncToServer();
+}
+function saveDeclared(newDeclared){
+  declaredMonths = newDeclared;
+  saveDeclaredLocal(declaredMonths);
+  syncToServer();
+}
+
+window.addEventListener("online", syncToServer);
+function monthKey(date){ return `${date.getFullYear()}-${pad(date.getMonth()+1)}`; }
+function isMonthDeclared(date){ return !!declaredMonths[monthKey(date)]; }
+
+/* ============ Nationale feestdagen (NL) ============ */
+// Berekent Pasen (Gauss-algoritme) en leidt de bewegende feestdagen daarvan af.
+function calcEaster(year){
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l) / 451);
+  const month = Math.floor((h + l - 7*m + 114) / 31); // 3=maart, 4=april
+  const day = ((h + l - 7*m + 114) % 31) + 1;
+  return new Date(year, month-1, day);
+}
+function addDays(date, n){
+  const d = new Date(date);
+  d.setDate(d.getDate()+n);
+  return d;
+}
+function getDutchHolidays(year){
+  const easter = calcEaster(year);
+  const list = [
+    { date: new Date(year,0,1), name: "Nieuwjaarsdag" },
+    { date: addDays(easter,-2), name: "Goede Vrijdag" },
+    { date: addDays(easter,0), name: "Eerste Paasdag" },
+    { date: addDays(easter,1), name: "Tweede Paasdag" },
+    { date: new Date(year,3,27), name: "Koningsdag" },
+    { date: new Date(year,4,5), name: "Bevrijdingsdag" },
+    { date: addDays(easter,39), name: "Hemelvaartsdag" },
+    { date: addDays(easter,49), name: "Eerste Pinksterdag" },
+    { date: addDays(easter,50), name: "Tweede Pinksterdag" },
+    { date: new Date(year,11,25), name: "Eerste Kerstdag" },
+    { date: new Date(year,11,26), name: "Tweede Kerstdag" }
+  ];
+  // Koningsdag verschuift naar 26 april als 27 april op zondag valt
+  const kd = list.find(h => h.name === "Koningsdag");
+  if(kd.date.getDay() === 0){ kd.date = new Date(year,3,26); }
+  return list;
+}
+let holidayCache = {}; // year -> Map(key -> name)
+function getHolidayMap(year){
+  if(holidayCache[year]) return holidayCache[year];
+  const map = new Map();
+  getDutchHolidays(year).forEach(h => map.set(toKey(h.date), h.name));
+  holidayCache[year] = map;
+  return map;
+}
+function getHolidayName(date){
+  const map = getHolidayMap(date.getFullYear());
+  return map.get(toKey(date)) || null;
+}
+
+/* ============ Datum helpers ============ */
+const DAGEN = ["Zo","Ma","Di","Wo","Do","Vr","Za"];
+const MAANDEN = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+
+function pad(n){ return String(n).padStart(2,"0"); }
+function toKey(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseKey(key){
+  const [y,m,d] = key.split("-").map(Number);
+  return new Date(y, m-1, d);
+}
+// ISO 8601 weeknummer (NL standaard: week begint maandag, week 1 bevat eerste donderdag)
+function isoWeekNumber(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7; // ma=0 ... zo=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3); // donderdag van deze week
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const weekNum = 1 + Math.round((d - firstThursday) / (7*24*3600*1000));
+  return weekNum;
+}
+function isoWeekYear(date){
+  // Jaar waartoe de ISO-week behoort (kan afwijken rond jaarwisseling)
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  return d.getUTCFullYear();
+}
+function mondayOfWeek(date){
+  const d = new Date(date);
+  const dayNum = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dayNum);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function isSameDay(a,b){
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+function fmtDateNL(date){
+  return `${pad(date.getDate())}-${pad(date.getMonth()+1)}-${date.getFullYear()}`;
+}
+function fmtDateLong(date){
+  return `${DAGEN[date.getDay()]} ${date.getDate()} ${MAANDEN[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/* ============ State ============ */
+let viewDate = new Date(); // huidige maand in beeld
+viewDate.setDate(1);
+let selectedKey = null; // datum-key die momenteel in modal wordt bewerkt
+let selectedType = "woon";
+
+const TYPE_LABEL = {
+  woon: "Woon-werkverkeer",
+  dienst: "Dienstreis",
+  thuis: "Thuiswerkdag",
+  vrij: "Vrije dag",
+  collectief: "Collectieve dag",
+  overig: "Overig"
+};
+const NO_KM_TYPES = ["thuis", "vrij", "collectief", "overig"]; // types zonder kilometerregistratie
+
+/* ============ DOM refs ============ */
+const calBody = document.getElementById("calBody");
+const monthLabel = document.getElementById("monthLabel");
+const sumWoon = document.getElementById("sumWoon");
+const sumDienst = document.getElementById("sumDienst");
+const sumThuis = document.getElementById("sumThuis");
+const sumKm = document.getElementById("sumKm");
+const ytdKm = document.getElementById("ytdKm");
+const ytdYear = document.getElementById("ytdYear");
+
+const modalBackdrop = document.getElementById("modalBackdrop");
+const modalTitle = document.getElementById("modalTitle");
+const modalSub = document.getElementById("modalSub");
+const entryDate = document.getElementById("entryDate");
+const typeSelect = document.getElementById("typeSelect");
+const entryKm = document.getElementById("entryKm");
+const entryRetour = document.getElementById("entryRetour");
+const entryBestemming = document.getElementById("entryBestemming");
+const entryOpmerking = document.getElementById("entryOpmerking");
+const kmFieldRow = document.getElementById("kmFieldRow");
+const bestemmingField = document.getElementById("bestemmingField");
+const overigLabelField = document.getElementById("overigLabelField");
+const entryOverigLabel = document.getElementById("entryOverigLabel");
+const existingEntriesBlock = document.getElementById("existingEntriesBlock");
+const existingEntriesList = document.getElementById("existingEntriesList");
+const entryFormDivider = document.getElementById("entryFormDivider");
+const cancelFormBtn = document.getElementById("cancelFormBtn");
+const saveEntryBtn = document.getElementById("saveEntryBtn");
+
+/* ============ Kalender renderen ============ */
+function dayTagText(entry){
+  if(entry.type === "overig"){
+    return entry.overigLabel || "Overig";
+  }
+  if(NO_KM_TYPES.includes(entry.type)){
+    return { thuis: "Thuiswerk", vrij: "Vrije dag", collectief: "Collectieve dag" }[entry.type] || TYPE_LABEL[entry.type];
+  }
+  const km = entry.retour ? (entry.km*2) : entry.km;
+  return `${entry.type==="woon"?"Woon-werk":"Dienstreis"} ${km?km+" km":""}`.trim();
+}
+
+function renderCalendar(){
+  monthLabel.textContent = `${MAANDEN[viewDate.getMonth()][0].toUpperCase()}${MAANDEN[viewDate.getMonth()].slice(1)} ${viewDate.getFullYear()}`;
+  updateDeclaredUI();
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const gridStart = mondayOfWeek(firstOfMonth);
+
+  calBody.innerHTML = "";
+  const today = new Date();
+
+  let cursor = new Date(gridStart);
+  let monthKm = 0, cWoon=0, cDienst=0, cThuis=0;
+
+  // bepaal aantal weken nodig om de hele maand te dekken
+  const lastOfMonth = new Date(year, month+1, 0);
+  let weeksNeeded = Math.ceil((( (lastOfMonth - gridStart) / 86400000 ) + 1) / 7);
+  if (weeksNeeded < 5) weeksNeeded = weeksNeeded; // 4-6 range natural
+
+  for(let w=0; w<weeksNeeded; w++){
+    const row = document.createElement("div");
+    row.className = "cal-week-row";
+
+    const wkNum = document.createElement("div");
+    wkNum.className = "wk-num";
+    const weekNumber = isoWeekNumber(cursor);
+    row.appendChild(wkNum);
+
+    let weekKm = 0;
+    const dayCellsForWeek = [];
+
+    for(let i=0;i<7;i++){
+      const d = new Date(cursor);
+      const key = toKey(d);
+      const cell = document.createElement("div");
+      cell.className = "day-cell";
+      if(d.getMonth() !== month) cell.classList.add("other-month");
+      const dow = d.getDay();
+      if(dow===0 || dow===6) cell.classList.add("weekend");
+      const holidayName = getHolidayName(d);
+      if(holidayName) cell.classList.add("holiday");
+      if(isSameDay(d, today)) cell.classList.add("today");
+
+      const numEl = document.createElement("div");
+      numEl.className = "day-num";
+      numEl.textContent = d.getDate();
+      cell.appendChild(numEl);
+
+      if(holidayName){
+        const hTag = document.createElement("div");
+        hTag.className = "holiday-tag";
+        hTag.textContent = holidayName;
+        hTag.title = holidayName;
+        cell.appendChild(hTag);
+      }
+
+      const dayEntries = entries[key] || [];
+      if(dayEntries.length > 0){
+        dayEntries.forEach(entry => {
+          const tag = document.createElement("div");
+          tag.className = `day-tag ${entry.type}`;
+          tag.textContent = dayTagText(entry);
+          if(!NO_KM_TYPES.includes(entry.type)){
+            const km = entry.retour ? (entry.km*2) : entry.km;
+            weekKm += (km || 0); // telt mee ongeacht welke maand-rij de dag toont, zodat de week-km altijd klopt
+          }
+          cell.appendChild(tag);
+        });
+        if(dayEntries.some(e => e.opmerking)){
+          const dot = document.createElement("div");
+          dot.className = "day-note-dot";
+          dot.title = "Opmerking aanwezig";
+          cell.appendChild(dot);
+        }
+        if(d.getMonth() === month){
+          dayEntries.forEach(entry => {
+            if(entry.type==="woon") cWoon++;
+            if(entry.type==="dienst") cDienst++;
+            if(entry.type==="thuis") cThuis++;
+            if(!NO_KM_TYPES.includes(entry.type)){
+              const km = entry.retour ? (entry.km*2) : entry.km;
+              monthKm += (km || 0);
+            }
+          });
+        }
+      }
+
+      cell.addEventListener("click", () => openModal(key));
+      row.appendChild(cell);
+      cursor.setDate(cursor.getDate()+1);
+    }
+
+    const kmRounded = weekKm % 1 === 0 ? weekKm : weekKm.toFixed(1);
+    wkNum.innerHTML = `<span>Week</span><b>${weekNumber}</b><span class="wk-km${weekKm===0?' zero':''}">${kmRounded} km</span>`;
+
+    calBody.appendChild(row);
+  }
+
+  sumWoon.textContent = cWoon;
+  sumDienst.textContent = cDienst;
+  sumThuis.textContent = cThuis;
+  sumKm.textContent = monthKm % 1 === 0 ? monthKm : monthKm.toFixed(1);
+
+  renderYtd();
+}
+
+function renderYtd(){
+  const year = viewDate.getFullYear();
+  let total = 0;
+  Object.entries(entries).forEach(([key, dayEntries]) => {
+    if(key.startsWith(String(year))){
+      dayEntries.forEach(e => {
+        if(!NO_KM_TYPES.includes(e.type)){
+          const km = e.retour ? (e.km*2) : e.km;
+          total += (km || 0);
+        }
+      });
+    }
+  });
+  ytdKm.textContent = total % 1 === 0 ? total : total.toFixed(1);
+  ytdYear.textContent = year;
+}
+
+/* ============ Declaratiestatus UI ============ */
+const declareBtn = document.getElementById("declareBtn");
+const declaredBadge = document.getElementById("declaredBadge");
+const calendarEl = document.getElementById("calendar");
+
+function updateDeclaredUI(){
+  const declared = isMonthDeclared(viewDate);
+  declaredBadge.style.display = declared ? "inline-flex" : "none";
+  calendarEl.classList.toggle("declared", declared);
+  declareBtn.textContent = declared ? "Declaratie ongedaan maken" : "Markeer maand als gedeclareerd";
+  declareBtn.classList.toggle("btn-outline", !declared);
+  declareBtn.classList.toggle("btn-primary", declared);
+}
+
+declareBtn.addEventListener("click", toggleDeclared);
+declaredBadge.addEventListener("click", toggleDeclared);
+
+function toggleDeclared(){
+  const key = monthKey(viewDate);
+  if(declaredMonths[key]){
+    delete declaredMonths[key];
+  } else {
+    declaredMonths[key] = true;
+  }
+  saveDeclared(declaredMonths);
+  updateDeclaredUI();
+}
+
+/* ============ Modal ============ */
+let editingIndex = null; // index in entries[key] array die bewerkt wordt, of null = nieuwe registratie
+
+function setType(type){
+  selectedType = type;
+  [...typeSelect.children].forEach(el => {
+    el.classList.toggle("active", el.dataset.type === type);
+  });
+  const noKm = NO_KM_TYPES.includes(type);
+  kmFieldRow.style.display = noKm ? "none" : "flex";
+  bestemmingField.style.display = (type === "dienst") ? "block" : "none";
+  overigLabelField.style.display = (type === "overig") ? "block" : "none";
+}
+
+function resetForm(){
+  editingIndex = null;
+  setType("woon");
+  entryKm.value = "";
+  entryRetour.value = "1";
+  entryBestemming.value = "";
+  entryOverigLabel.value = "";
+  entryOpmerking.value = "";
+  saveEntryBtn.textContent = "Toevoegen";
+  cancelFormBtn.style.display = "none";
+}
+
+function entrySummaryText(entry){
+  if(entry.type === "overig"){
+    const label = entry.overigLabel || "Overig";
+    return entry.opmerking ? `${label} — ${entry.opmerking}` : label;
+  }
+  if(NO_KM_TYPES.includes(entry.type)){
+    return entry.opmerking ? `${TYPE_LABEL[entry.type]} — ${entry.opmerking}` : TYPE_LABEL[entry.type];
+  }
+  const km = entry.retour ? (entry.km*2) : entry.km;
+  const parts = [];
+  if(entry.type === "dienst" && entry.bestemming) parts.push(entry.bestemming);
+  if(km) parts.push(`${km} km${entry.retour ? " (retour)" : " (enkel)"}`);
+  if(entry.opmerking) parts.push(entry.opmerking);
+  return parts.join(" — ") || (entry.type === "woon" ? "Woon-werkverkeer" : "Dienstreis");
+}
+
+function renderExistingEntries(key){
+  const dayEntries = entries[key] || [];
+  existingEntriesList.innerHTML = "";
+
+  if(dayEntries.length === 0){
+    existingEntriesBlock.style.display = "none";
+    entryFormDivider.style.display = "none";
+    return;
+  }
+
+  existingEntriesBlock.style.display = "block";
+  entryFormDivider.style.display = "flex";
+
+  dayEntries.forEach((entry, idx) => {
+    const row = document.createElement("div");
+    row.className = "existing-entry";
+
+    const tag = document.createElement("span");
+    tag.className = `existing-tag ${entry.type}`;
+    tag.textContent = TYPE_LABEL[entry.type];
+    row.appendChild(tag);
+
+    const detail = document.createElement("span");
+    detail.className = "existing-detail";
+    detail.textContent = entrySummaryText(entry);
+    row.appendChild(detail);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "existing-remove";
+    removeBtn.innerHTML = "&times;";
+    removeBtn.title = "Verwijderen";
+    removeBtn.type = "button";
+    let confirmTimer = null;
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if(removeBtn.classList.contains("confirming")){
+        clearTimeout(confirmTimer);
+        removeEntryAt(key, idx);
+      } else {
+        removeBtn.classList.add("confirming");
+        removeBtn.innerHTML = "Zeker?";
+        removeBtn.title = "Klik nogmaals om te bevestigen";
+        confirmTimer = setTimeout(() => {
+          removeBtn.classList.remove("confirming");
+          removeBtn.innerHTML = "&times;";
+          removeBtn.title = "Verwijderen";
+        }, 2500);
+      }
+    });
+    row.appendChild(removeBtn);
+
+    // Klik op de rij (buiten de verwijderknop) = bewerken
+    row.addEventListener("click", () => loadEntryIntoForm(key, idx));
+
+    existingEntriesList.appendChild(row);
+  });
+}
+
+function loadEntryIntoForm(key, idx){
+  const entry = entries[key][idx];
+  editingIndex = idx;
+  setType(entry.type);
+  entryKm.value = entry.km || "";
+  entryRetour.value = entry.retour ? "1" : "0";
+  entryBestemming.value = entry.bestemming || "";
+  entryOverigLabel.value = entry.overigLabel || "";
+  entryOpmerking.value = entry.opmerking || "";
+  saveEntryBtn.textContent = "Wijzigingen opslaan";
+  cancelFormBtn.style.display = "inline-flex";
+}
+
+function removeEntryAt(key, idx){
+  entries[key].splice(idx, 1);
+  if(entries[key].length === 0){
+    delete entries[key];
+  }
+  saveEntries(entries);
+  if(editingIndex === idx){
+    resetForm();
+  } else if(editingIndex !== null && editingIndex > idx){
+    editingIndex -= 1; // index-verschuiving door verwijderde regel ervoor
+  }
+  renderExistingEntries(key);
+  renderCalendar();
+}
+
+function openModal(key){
+  selectedKey = key;
+  const date = parseKey(key);
+
+  modalTitle.textContent = "Registratie";
+  modalSub.textContent = `${fmtDateLong(date)} — week ${isoWeekNumber(date)}`;
+  entryDate.value = key;
+
+  resetForm();
+  renderExistingEntries(key);
+
+  modalBackdrop.classList.add("open");
+}
+
+function closeModal(){
+  modalBackdrop.classList.remove("open");
+  selectedKey = null;
+  editingIndex = null;
+}
+
+typeSelect.addEventListener("click", (e) => {
+  const opt = e.target.closest(".type-option");
+  if(opt) setType(opt.dataset.type);
+});
+
+document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+document.getElementById("cancelEntryBtn").addEventListener("click", closeModal);
+cancelFormBtn.addEventListener("click", resetForm);
+modalBackdrop.addEventListener("click", (e) => { if(e.target === modalBackdrop) closeModal(); });
+document.addEventListener("keydown", (e) => { if(e.key === "Escape" && modalBackdrop.classList.contains("open")) closeModal(); });
+
+document.getElementById("saveEntryBtn").addEventListener("click", () => {
+  const key = entryDate.value;
+  if(!key){ alert("Kies een datum."); return; }
+
+  const rec = { type: selectedType };
+  if(!NO_KM_TYPES.includes(selectedType)){
+    rec.km = parseFloat(entryKm.value) || 0;
+    rec.retour = entryRetour.value === "1";
+    if(selectedType === "dienst") rec.bestemming = entryBestemming.value.trim();
+  }
+  if(selectedType === "overig"){
+    rec.overigLabel = entryOverigLabel.value.trim() || "Overig";
+  }
+  rec.opmerking = entryOpmerking.value.trim();
+
+  if(!entries[key]) entries[key] = [];
+
+  // Als de datum is gewijzigd t.o.v. de dag waarop de modal geopend was, verplaats de bewerkte regel
+  const targetIsDifferentDay = selectedKey && selectedKey !== key;
+  if(targetIsDifferentDay && editingIndex !== null && entries[selectedKey]){
+    entries[selectedKey].splice(editingIndex, 1);
+    if(entries[selectedKey].length === 0) delete entries[selectedKey];
+    if(!entries[key]) entries[key] = [];
+    entries[key].push(rec);
+  } else if(editingIndex !== null){
+    entries[key][editingIndex] = rec;
+  } else {
+    entries[key].push(rec);
+  }
+
+  saveEntries(entries);
+
+  const d = parseKey(key);
+  if(d.getFullYear() !== viewDate.getFullYear() || d.getMonth() !== viewDate.getMonth()){
+    viewDate = new Date(d.getFullYear(), d.getMonth(), 1);
+  }
+
+  selectedKey = key;
+  resetForm();
+  renderExistingEntries(key);
+  renderCalendar();
+});
+
+/* ============ Navigatie ============ */
+document.getElementById("prevMonth").addEventListener("click", () => {
+  viewDate.setMonth(viewDate.getMonth()-1);
+  renderCalendar();
+});
+document.getElementById("nextMonth").addEventListener("click", () => {
+  viewDate.setMonth(viewDate.getMonth()+1);
+  renderCalendar();
+});
+document.getElementById("todayBtn").addEventListener("click", () => {
+  const t = new Date();
+  viewDate = new Date(t.getFullYear(), t.getMonth(), 1);
+  renderCalendar();
+});
+document.getElementById("addEntryBtn").addEventListener("click", () => {
+  openModal(toKey(new Date()));
+});
+
+/* ============ Bulk-invoer (meerdere dagen tegelijk) ============ */
+const bulkModalBackdrop = document.getElementById("bulkModalBackdrop");
+const bulkStartDate = document.getElementById("bulkStartDate");
+const bulkEndDate = document.getElementById("bulkEndDate");
+const bulkSkipWeekends = document.getElementById("bulkSkipWeekends");
+const bulkTypeSelect = document.getElementById("bulkTypeSelect");
+const bulkKmFieldRow = document.getElementById("bulkKmFieldRow");
+const bulkBestemmingField = document.getElementById("bulkBestemmingField");
+const bulkOverigLabelField = document.getElementById("bulkOverigLabelField");
+const bulkOverigLabel = document.getElementById("bulkOverigLabel");
+const bulkKm = document.getElementById("bulkKm");
+const bulkRetour = document.getElementById("bulkRetour");
+const bulkBestemming = document.getElementById("bulkBestemming");
+const bulkOpmerking = document.getElementById("bulkOpmerking");
+const bulkPreview = document.getElementById("bulkPreview");
+let bulkSelectedType = "woon";
+
+function setBulkType(type){
+  bulkSelectedType = type;
+  [...bulkTypeSelect.children].forEach(el => {
+    el.classList.toggle("active", el.dataset.type === type);
+  });
+  const noKm = NO_KM_TYPES.includes(type);
+  bulkKmFieldRow.style.display = noKm ? "none" : "flex";
+  bulkBestemmingField.style.display = (type === "dienst") ? "block" : "none";
+  bulkOverigLabelField.style.display = (type === "overig") ? "block" : "none";
+  updateBulkPreview();
+}
+
+function countBulkDays(){
+  if(!bulkStartDate.value || !bulkEndDate.value) return 0;
+  const start = parseKey(bulkStartDate.value);
+  const end = parseKey(bulkEndDate.value);
+  if(end < start) return 0;
+  let count = 0;
+  const cur = new Date(start);
+  while(cur <= end){
+    const dow = cur.getDay();
+    if(!(bulkSkipWeekends.checked && (dow===0||dow===6))) count++;
+    cur.setDate(cur.getDate()+1);
+  }
+  return count;
+}
+
+function updateBulkPreview(){
+  const n = countBulkDays();
+  if(!bulkStartDate.value || !bulkEndDate.value){
+    bulkPreview.textContent = "Kies een start- en einddatum.";
+  } else if(parseKey(bulkEndDate.value) < parseKey(bulkStartDate.value)){
+    bulkPreview.textContent = "De einddatum ligt vóór de startdatum.";
+  } else {
+    bulkPreview.textContent = `Dit voegt ${TYPE_LABEL[bulkSelectedType]} toe op ${n} dag${n===1?'':'en'}.`;
+  }
+}
+
+function openBulkModal(){
+  const todayKey = toKey(new Date());
+  bulkStartDate.value = todayKey;
+  bulkEndDate.value = todayKey;
+  bulkSkipWeekends.checked = true;
+  bulkKm.value = "";
+  bulkRetour.value = "1";
+  bulkBestemming.value = "";
+  bulkOverigLabel.value = "";
+  bulkOpmerking.value = "";
+  setBulkType("woon");
+  updateBulkPreview();
+  bulkModalBackdrop.classList.add("open");
+}
+function closeBulkModal(){
+  bulkModalBackdrop.classList.remove("open");
+}
+
+document.getElementById("bulkAddBtn").addEventListener("click", openBulkModal);
+document.getElementById("bulkModalCloseBtn").addEventListener("click", closeBulkModal);
+document.getElementById("bulkCancelBtn").addEventListener("click", closeBulkModal);
+bulkModalBackdrop.addEventListener("click", (e) => { if(e.target === bulkModalBackdrop) closeBulkModal(); });
+document.addEventListener("keydown", (e) => { if(e.key === "Escape" && bulkModalBackdrop.classList.contains("open")) closeBulkModal(); });
+
+bulkTypeSelect.addEventListener("click", (e) => {
+  const opt = e.target.closest(".type-option");
+  if(opt) setBulkType(opt.dataset.type);
+});
+bulkStartDate.addEventListener("change", updateBulkPreview);
+bulkEndDate.addEventListener("change", updateBulkPreview);
+bulkSkipWeekends.addEventListener("change", updateBulkPreview);
+
+document.getElementById("bulkSaveBtn").addEventListener("click", () => {
+  if(!bulkStartDate.value || !bulkEndDate.value){
+    alert("Kies een start- en einddatum.");
+    return;
+  }
+  const start = parseKey(bulkStartDate.value);
+  const end = parseKey(bulkEndDate.value);
+  if(end < start){
+    alert("De einddatum ligt vóór de startdatum.");
+    return;
+  }
+
+  const baseRec = { type: bulkSelectedType };
+  if(!NO_KM_TYPES.includes(bulkSelectedType)){
+    baseRec.km = parseFloat(bulkKm.value) || 0;
+    baseRec.retour = bulkRetour.value === "1";
+    if(bulkSelectedType === "dienst") baseRec.bestemming = bulkBestemming.value.trim();
+  }
+  if(bulkSelectedType === "overig"){
+    baseRec.overigLabel = bulkOverigLabel.value.trim() || "Overig";
+  }
+  baseRec.opmerking = bulkOpmerking.value.trim();
+
+  let addedCount = 0;
+  const cur = new Date(start);
+  let lastKey = null;
+  while(cur <= end){
+    const dow = cur.getDay();
+    if(!(bulkSkipWeekends.checked && (dow===0||dow===6))){
+      const key = toKey(cur);
+      if(!entries[key]) entries[key] = [];
+      entries[key].push({ ...baseRec });
+      addedCount++;
+      lastKey = key;
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+
+  if(addedCount === 0){
+    alert("Er zijn geen dagen om toe te voegen binnen deze periode (mogelijk alleen weekenddagen).");
+    return;
+  }
+
+  saveEntries(entries);
+
+  if(lastKey){
+    const d = parseKey(lastKey);
+    viewDate = new Date(d.getFullYear(), d.getMonth(), 1);
+  }
+
+  closeBulkModal();
+  renderCalendar();
+});
+
+/* ============ Library-gereedheid ============ */
+// Sommige browsers/extensies laden CDN-scripts vertraagd of blokkeren ze.
+// Deze helper wacht kort op de library voordat we de gebruiker een foutmelding geven.
+function waitForLib(checkFn, timeoutMs){
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function poll(){
+      if(checkFn()) return resolve(true);
+      if(Date.now() - start > timeoutMs) return resolve(false);
+      setTimeout(poll, 100);
+    })();
+  });
+}
+
+/* ============ Export helpers ============ */
+function getEntriesForRange(range){
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const list = [];
+  Object.entries(entries).forEach(([key, dayEntries]) => {
+    const date = parseKey(key);
+    dayEntries.forEach((e, idxInDay) => {
+      list.push({ key, date, idxInDay, ...e });
+    });
+  });
+  return list
+    .filter(item => {
+      if(range === "month"){
+        return item.date.getFullYear() === year && item.date.getMonth() === month;
+      }
+      if(range === "year"){
+        return item.date.getFullYear() === year;
+      }
+      return true; // all
+    })
+    .sort((a,b) => a.date - b.date || a.idxInDay - b.idxInDay);
+}
+
+function computeKm(item){
+  if(NO_KM_TYPES.includes(item.type)) return 0;
+  const single = item.km || 0;
+  return item.retour ? single*2 : single;
+}
+
+function summaryCountsText(items){
+  const counts = { woon:0, dienst:0, thuis:0, vrij:0, collectief:0, overig:0 };
+  items.forEach(i => { if(counts[i.type] !== undefined) counts[i.type]++; });
+  const parts = [];
+  if(counts.woon) parts.push(`Woon-werk: ${counts.woon}`);
+  if(counts.dienst) parts.push(`Dienstreizen: ${counts.dienst}`);
+  if(counts.thuis) parts.push(`Thuiswerk: ${counts.thuis}`);
+  if(counts.vrij) parts.push(`Vrije dagen: ${counts.vrij}`);
+  if(counts.collectief) parts.push(`Collectieve dagen: ${counts.collectief}`);
+  if(counts.overig) parts.push(`Overig: ${counts.overig}`);
+  return parts.join(" | ") || "—";
+}
+
+function rangeLabel(range){
+  if(range === "month") return `${MAANDEN[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+  if(range === "year") return `Jaar ${viewDate.getFullYear()}`;
+  return "Alle registraties";
+}
+
+/* ============ Groepering per maand ============ */
+function groupByMonth(list){
+  // Map "YYYY-MM" -> { gKey, label, declared, items[] }, in chronologische volgorde
+  const groups = new Map();
+  list.forEach(item => {
+    const gKey = `${item.date.getFullYear()}-${pad(item.date.getMonth()+1)}`;
+    if(!groups.has(gKey)){
+      groups.set(gKey, {
+        gKey,
+        label: `${MAANDEN[item.date.getMonth()][0].toUpperCase()}${MAANDEN[item.date.getMonth()].slice(1)} ${item.date.getFullYear()}`,
+        declared: !!declaredMonths[gKey],
+        items: []
+      });
+    }
+    groups.get(gKey).items.push(item);
+  });
+  return [...groups.entries()].sort((a,b) => a[0].localeCompare(b[0])).map(([k,v]) => v);
+}
+
+/* Kolomvolgorde (vast, overal): Weeknummer | Datum | Jaar | Type | Bestemming | Enkele reis (km) | Retour | Totaal | Opmerkingen */
+const COLUMNS = ["Weeknummer","Datum","Jaar","Type","Bestemming","Enkele reis (km)","Retour","Totaal","Opmerkingen"];
+
+function rowForItem(item){
+  const km = computeKm(item);
+  const typeLabel = item.type === "overig" ? (item.overigLabel || "Overig") : TYPE_LABEL[item.type];
+  const noKm = NO_KM_TYPES.includes(item.type);
+  return {
+    "Weeknummer": isoWeekNumber(item.date),
+    "Datum": fmtDateNL(item.date),
+    "Jaar": isoWeekYear(item.date),
+    "Type": typeLabel,
+    "Bestemming": item.bestemming || "",
+    "Enkele reis (km)": noKm ? "" : (item.km || 0),
+    "Retour": noKm ? "" : (item.retour ? "Ja" : "Nee"),
+    "Totaal": noKm ? "" : km,
+    "Opmerkingen": item.opmerking || ""
+  };
+}
+
+/* ============ Excel export (gegroepeerd per maand) ============ */
+document.getElementById("exportExcelBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("exportExcelBtn");
+  const originalLabel = btn.textContent;
+  try{
+  const range = document.getElementById("exportRange").value;
+  const list = getEntriesForRange(range);
+
+  if(list.length === 0){
+    alert("Geen registraties gevonden voor de gekozen periode.");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Bezig…";
+
+  const ready = await waitForLib(() => typeof window.XLSX !== "undefined", 6000);
+  if(!ready){
+    alert("De Excel-bibliotheek kon niet geladen worden. Controleer je internetverbinding en laad de pagina opnieuw.");
+    return;
+  }
+
+  const monthGroups = groupByMonth(list);
+  const aoa = []; // array-of-arrays, opgebouwd met maandkoppen
+  const merges = [];
+
+  monthGroups.forEach(group => {
+    // Maandkop-rij (samengevoegde cel over alle kolommen), met declaratiestatus
+    const statusLabel = group.declared ? "  —  GEDECLAREERD" : "  —  Nog niet gedeclareerd";
+    merges.push({
+      s: { r: aoa.length, c: 0 },
+      e: { r: aoa.length, c: COLUMNS.length-1 }
+    });
+    aoa.push([`${group.label}${statusLabel}`, ...Array(COLUMNS.length-1).fill("")]);
+
+    // Kolomkoppen
+    aoa.push([...COLUMNS]);
+
+    // Databregels
+    group.items.forEach(item => {
+      const row = rowForItem(item);
+      aoa.push(COLUMNS.map(c => row[c]));
+    });
+
+    // Maandtotaal
+    const mKm = group.items.reduce((s,i) => s + computeKm(i), 0);
+    aoa.push(["", "", "", "Totaal", "", "", "", mKm, summaryCountsText(group.items)]);
+
+    // Lege regel tussen maanden
+    aoa.push(Array(COLUMNS.length).fill(""));
+  });
+
+  // Eindtotaal onderaan (alleen zinvol bij meer dan 1 maand)
+  if(monthGroups.length > 1){
+    const totalKm = list.reduce((s,i) => s + computeKm(i), 0);
+    merges.push({ s:{r:aoa.length,c:0}, e:{r:aoa.length,c:COLUMNS.length-1} });
+    aoa.push(["EINDTOTAAL", ...Array(COLUMNS.length-1).fill("")]);
+    aoa.push(["", "", "", "Totaal", "", "", "", totalKm, summaryCountsText(list)]);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [
+    {wch:11},{wch:12},{wch:7},{wch:16},{wch:26},{wch:16},{wch:8},{wch:10},{wch:42}
+  ];
+  ws["!merges"] = merges;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Reisregistratie");
+
+  const filename = `reisregistratie_${range}_${toKey(new Date())}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  }catch(err){
+    console.error("Excel-export mislukt:", err);
+    alert("Het Excel-bestand kon niet gegenereerd worden. Probeer het opnieuw of controleer de browserconsole (F12) voor details.");
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+/* ============ PDF export (gegroepeerd per maand) ============ */
+document.getElementById("exportPdfBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("exportPdfBtn");
+  const originalLabel = btn.textContent;
+  try{
+    const range = document.getElementById("exportRange").value;
+    const list = getEntriesForRange(range);
+
+    if(list.length === 0){
+      alert("Geen registraties gevonden voor de gekozen periode.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Bezig…";
+
+    const ready = await waitForLib(
+      () => window.jspdf && typeof window.jspdf.jsPDF === "function",
+      6000
+    );
+    if(!ready){
+      alert("De PDF-bibliotheek kon niet geladen worden. Controleer je internetverbinding en laad de pagina opnieuw.");
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+    const tableReady = await waitForLib(() => typeof doc.autoTable === "function", 3000);
+    if(!tableReady){
+      alert("De PDF-tabelmodule kon niet geladen worden. Controleer je internetverbinding en laad de pagina opnieuw.");
+      return;
+    }
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 40;
+
+    // Kop
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(31,42,36);
+    doc.text("Reisregistratie", marginX, 46);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(75,86,78);
+    doc.text(`Periode: ${rangeLabel(range)}`, marginX, 62);
+    doc.text(`Gegenereerd op ${fmtDateNL(new Date())}`, pageWidth - marginX, 46, { align: "right" });
+
+    doc.setDrawColor(31,42,36);
+    doc.setLineWidth(1.1);
+    doc.line(marginX, 72, pageWidth - marginX, 72);
+
+    const monthGroups = groupByMonth(list);
+    let cursorY = 84;
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    monthGroups.forEach((group, idx) => {
+      // Nieuwe pagina als er te weinig ruimte is voor kop + minstens een paar rijen
+      if(cursorY > pageHeight - 120){
+        doc.addPage();
+        cursorY = 40;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11.5);
+      doc.setTextColor(47,75,60);
+      doc.text(group.label, marginX, cursorY);
+
+      if(group.declared){
+        const labelWidth = doc.getTextWidth(group.label);
+        doc.setFontSize(8.5);
+        doc.setTextColor(255,255,255);
+        const badgeX = marginX + labelWidth + 10;
+        doc.setFillColor(47,75,60);
+        doc.roundedRect(badgeX, cursorY - 10, 68, 14, 2, 2, "F");
+        doc.text("GEDECLAREERD", badgeX + 34, cursorY - 1, { align: "center" });
+      }
+      cursorY += 8;
+
+      const body = group.items.map(item => {
+        const km = computeKm(item);
+        const typeLabel = item.type === "overig" ? (item.overigLabel || "Overig") : TYPE_LABEL[item.type];
+        const noKm = NO_KM_TYPES.includes(item.type);
+        return [
+          String(isoWeekNumber(item.date)),
+          fmtDateNL(item.date),
+          String(isoWeekYear(item.date)),
+          typeLabel,
+          item.bestemming || "—",
+          noKm ? "—" : String(item.km || 0),
+          noKm ? "—" : (item.retour ? "Ja" : "Nee"),
+          noKm ? "—" : (km % 1 === 0 ? String(km) : km.toFixed(1)),
+          item.opmerking || ""
+        ];
+      });
+
+      doc.autoTable({
+        startY: cursorY,
+        margin: { left: marginX, right: marginX },
+        head: [["Week","Datum","Jaar","Type","Bestemming","Enkele reis (km)","Retour","Totaal","Opmerkingen"]],
+        body: body,
+        styles: {
+          font: "helvetica", fontSize: 8.5, cellPadding: 5, lineColor: [220,214,200], lineWidth: 0.5,
+          textColor: [31,42,36]
+        },
+        headStyles: { fillColor: [47,75,60], textColor: [255,255,255], fontStyle: "bold", fontSize: 8.5 },
+        alternateRowStyles: { fillColor: [246,244,238] },
+        columnStyles: {
+          0: { cellWidth: 34, halign: "center" },
+          1: { cellWidth: 62 },
+          2: { cellWidth: 34, halign: "center" },
+          3: { cellWidth: 78 },
+          4: { cellWidth: 105 },
+          5: { cellWidth: 60, halign: "right" },
+          6: { cellWidth: 42, halign: "center" },
+          7: { cellWidth: 48, halign: "right" },
+          8: { cellWidth: "auto" }
+        },
+        didDrawPage: function(){
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFontSize(8);
+          doc.setTextColor(120,120,120);
+          doc.text(
+            `Pagina ${doc.internal.getCurrentPageInfo().pageNumber} van ${pageCount}`,
+            pageWidth - marginX, pageHeight - 20, { align: "right" }
+          );
+        }
+      });
+
+      cursorY = doc.lastAutoTable.finalY + 14;
+
+      const mKm = group.items.reduce((s,i) => s + computeKm(i), 0);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(31,42,36);
+      doc.text(`Maandtotaal: ${mKm % 1 === 0 ? mKm : mKm.toFixed(1)} km`, marginX, cursorY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(75,86,78);
+      doc.text(summaryCountsText(group.items), marginX + 150, cursorY);
+
+      cursorY += 26;
+    });
+
+    // Eindtotaal (alleen zinvol bij meer dan 1 maand)
+    if(monthGroups.length > 1){
+      if(cursorY > pageHeight - 70){
+        doc.addPage();
+        cursorY = 40;
+      }
+      const totalKm = list.reduce((s,i) => s + computeKm(i), 0);
+
+      doc.setDrawColor(31,42,36);
+      doc.setLineWidth(1);
+      doc.line(marginX, cursorY - 12, pageWidth - marginX, cursorY - 12);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(31,42,36);
+      doc.text(`Eindtotaal: ${totalKm % 1 === 0 ? totalKm : totalKm.toFixed(1)} km`, marginX, cursorY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(75,86,78);
+      doc.text(summaryCountsText(list), marginX, cursorY + 16);
+    }
+
+    const filename = `reisregistratie_${range}_${toKey(new Date())}.pdf`;
+    doc.save(filename);
+  }catch(err){
+    console.error("PDF-export mislukt:", err);
+    alert("De PDF kon niet gegenereerd worden. Probeer het opnieuw of controleer de browserconsole (F12) voor details.");
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+/* ============ Init ============ */
+renderCalendar();
+
+initialSyncFromServer();
+
+})();
+
+</script>
+</body>
+</html>

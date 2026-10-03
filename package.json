@@ -1,0 +1,9 @@
+{
+  "name": "reisregistratie",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reisregistratie app met cross-device synchronisatie via Netlify Blobs.",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
