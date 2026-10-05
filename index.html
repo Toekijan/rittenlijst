@@ -1525,9 +1525,12 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
     // Kolomkoppen
     aoa.push([...COLUMNS]);
 
-    // Databregels — alle regels van dezelfde kalenderdag krijgen dezelfde kleur
-    // (op basis van het type van de eerste regel die dag); de eerstvolgende dag
-    // krijgt zijn eigen kleur, bepaald door zíjn type.
+    // Databregels — twee kleurzones per rij:
+    //  1) de dag-kolommen (Weeknummer/Datum/Dag/Jaar): alle regels van dezelfde
+    //     kalenderdag krijgen dezelfde kleur, zodat je ziet welke regels bij
+    //     elkaar horen; de eerstvolgende dag krijgt zijn eigen kleur.
+    //  2) de rest van de rij (Type t/m Opmerkingen): kleur per individuele regel,
+    //     op basis van het type van díe regel zelf.
     let dayKey = null;
     let dayColorType = null;
     group.items.forEach(item => {
@@ -1536,7 +1539,7 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
         dayKey = item.key;
         dayColorType = item.type;
       }
-      rowFills.push({ row: aoa.length, type: dayColorType });
+      rowFills.push({ row: aoa.length, dayType: dayColorType, rowType: item.type });
       aoa.push(COLUMNS.map(c => row[c]));
     });
 
@@ -1562,11 +1565,11 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   ];
   ws["!merges"] = merges;
 
-  // Achtergrondkleur per rij: elk type heeft een eigen, duidelijk afwijkende kleur,
-  // zodat het type in één oogopslag herkenbaar is. Omdat dit per kalenderdag wordt
-  // bepaald (zie hierboven), krijgen alle regels van dezelfde dag automatisch
-  // dezelfde kleur.
-  const FILL_COLOR = {
+  // Achtergrondkleur, in twee onafhankelijke zones per rij:
+  //  - Dag-kolommen (0-3: Weeknummer/Datum/Dag/Jaar): kleur per type, voor dag-groepering.
+  //  - Rest van de rij (4-9: Type t/m Opmerkingen): alleen woon-werk en thuiswerk krijgen
+  //    een kleur (geel/groen); dienstreis en overige types blijven hier ongekleurd.
+  const DAY_ZONE_COLOR = {
     woon: "FFF2A8",       // geel
     thuis: "C6E8B0",      // groen
     dienst: "BDD7EE",     // blauw
@@ -1574,13 +1577,22 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
     collectief: "F4CCCC", // roze
     overig: "D9D9D9"      // grijs
   };
-  rowFills.forEach(({row, type}) => {
-    const color = FILL_COLOR[type];
+  const REST_ZONE_COLOR = {
+    woon: "FFF2A8",  // geel
+    thuis: "C6E8B0"  // groen
+    // dienst, vrij, collectief, overig: bewust geen kleur
+  };
+  const DAY_ZONE_END = 3; // laatste kolomindex van de dag-kolommen (Jaar)
+  function applyFill(row, colIdx, color){
     if(!color) return;
+    const ref = XLSX.utils.encode_cell({ r: row, c: colIdx });
+    if(!ws[ref]) ws[ref] = { t: "s", v: "" };
+    ws[ref].s = { fill: { patternType: "solid", fgColor: { rgb: color }, bgColor: { rgb: color } } };
+  }
+  rowFills.forEach(({row, dayType, rowType}) => {
     COLUMNS.forEach((c, colIdx) => {
-      const ref = XLSX.utils.encode_cell({ r: row, c: colIdx });
-      if(!ws[ref]) ws[ref] = { t: "s", v: "" };
-      ws[ref].s = { fill: { patternType: "solid", fgColor: { rgb: color }, bgColor: { rgb: color } } };
+      const color = colIdx <= DAY_ZONE_END ? DAY_ZONE_COLOR[dayType] : REST_ZONE_COLOR[rowType];
+      applyFill(row, colIdx, color);
     });
   });
 
