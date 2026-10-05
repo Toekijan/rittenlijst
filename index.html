@@ -1562,10 +1562,18 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   ];
   ws["!merges"] = merges;
 
-  // Achtergrondkleur per rij: geel voor woon-werk, groen voor thuiswerk, overige
-  // types geen kleur. Omdat dit per kalenderdag wordt bepaald (zie hierboven),
-  // krijgen alle regels van dezelfde dag automatisch dezelfde kleur.
-  const FILL_COLOR = { woon: "FFF2A8", thuis: "C6E8B0" };
+  // Achtergrondkleur per rij: elk type heeft een eigen, duidelijk afwijkende kleur,
+  // zodat het type in één oogopslag herkenbaar is. Omdat dit per kalenderdag wordt
+  // bepaald (zie hierboven), krijgen alle regels van dezelfde dag automatisch
+  // dezelfde kleur.
+  const FILL_COLOR = {
+    woon: "FFF2A8",       // geel
+    thuis: "C6E8B0",      // groen
+    dienst: "BDD7EE",     // blauw
+    vrij: "D9D2E9",       // paars
+    collectief: "F4CCCC", // roze
+    overig: "D9D9D9"      // grijs
+  };
   rowFills.forEach(({row, type}) => {
     const color = FILL_COLOR[type];
     if(!color) return;
