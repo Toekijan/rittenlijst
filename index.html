@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reisregistratie</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -762,6 +762,7 @@ function getHolidayName(date){
 
 /* ============ Datum helpers ============ */
 const DAGEN = ["Zo","Ma","Di","Wo","Do","Vr","Za"];
+const DAGEN_VOL = ["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
 const MAANDEN = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
 
 function pad(n){ return String(n).padStart(2,"0"); }
@@ -1458,8 +1459,8 @@ function groupByMonth(list){
   return [...groups.entries()].sort((a,b) => a[0].localeCompare(b[0])).map(([k,v]) => v);
 }
 
-/* Kolomvolgorde (vast, overal): Weeknummer | Datum | Jaar | Type | Bestemming | Enkele reis (km) | Retour | Totaal | Opmerkingen */
-const COLUMNS = ["Weeknummer","Datum","Jaar","Type","Bestemming","Enkele reis (km)","Retour","Totaal","Opmerkingen"];
+/* Kolomvolgorde (vast, overal): Weeknummer | Datum | Dag | Jaar | Type | Bestemming | Enkele reis (km) | Retour | Totaal | Opmerkingen */
+const COLUMNS = ["Weeknummer","Datum","Dag","Jaar","Type","Bestemming","Enkele reis (km)","Retour","Totaal","Opmerkingen"];
 
 function rowForItem(item){
   const km = computeKm(item);
@@ -1468,6 +1469,7 @@ function rowForItem(item){
   return {
     "Weeknummer": isoWeekNumber(item.date),
     "Datum": fmtDateNL(item.date),
+    "Dag": DAGEN_VOL[item.date.getDay()],
     "Jaar": isoWeekYear(item.date),
     "Type": typeLabel,
     "Bestemming": item.bestemming || "",
@@ -1503,6 +1505,7 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   const monthGroups = groupByMonth(list);
   const aoa = []; // array-of-arrays, opgebouwd met maandkoppen
   const merges = [];
+  const rowFills = []; // { row, type } voor achtergrondkleur per databregel
 
   monthGroups.forEach(group => {
     // Maandkop-rij (samengevoegde cel over alle kolommen), met declaratiestatus
@@ -1519,12 +1522,15 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
     // Databregels
     group.items.forEach(item => {
       const row = rowForItem(item);
+      if(item.type === "woon" || item.type === "thuis"){
+        rowFills.push({ row: aoa.length, type: item.type });
+      }
       aoa.push(COLUMNS.map(c => row[c]));
     });
 
     // Maandtotaal
     const mKm = group.items.reduce((s,i) => s + computeKm(i), 0);
-    aoa.push(["", "", "", "Totaal", "", "", "", mKm, summaryCountsText(group.items)]);
+    aoa.push(["", "", "", "", "Totaal", "", "", "", mKm, summaryCountsText(group.items)]);
 
     // Lege regel tussen maanden
     aoa.push(Array(COLUMNS.length).fill(""));
@@ -1535,14 +1541,25 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
     const totalKm = list.reduce((s,i) => s + computeKm(i), 0);
     merges.push({ s:{r:aoa.length,c:0}, e:{r:aoa.length,c:COLUMNS.length-1} });
     aoa.push(["EINDTOTAAL", ...Array(COLUMNS.length-1).fill("")]);
-    aoa.push(["", "", "", "Totaal", "", "", "", totalKm, summaryCountsText(list)]);
+    aoa.push(["", "", "", "", "Totaal", "", "", "", totalKm, summaryCountsText(list)]);
   }
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [
-    {wch:11},{wch:12},{wch:7},{wch:16},{wch:26},{wch:16},{wch:8},{wch:10},{wch:42}
+    {wch:11},{wch:12},{wch:11},{wch:7},{wch:16},{wch:26},{wch:16},{wch:8},{wch:10},{wch:42}
   ];
   ws["!merges"] = merges;
+
+  // Achtergrondkleur per rij: geel voor woon-werk, groen voor thuiswerk
+  const FILL_COLOR = { woon: "FFF2A8", thuis: "C6E8B0" };
+  rowFills.forEach(({row, type}) => {
+    const color = FILL_COLOR[type];
+    COLUMNS.forEach((c, colIdx) => {
+      const ref = XLSX.utils.encode_cell({ r: row, c: colIdx });
+      if(!ws[ref]) ws[ref] = { t: "s", v: "" };
+      ws[ref].s = { fill: { patternType: "solid", fgColor: { rgb: color }, bgColor: { rgb: color } } };
+    });
+  });
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Reisregistratie");
