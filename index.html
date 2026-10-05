@@ -1462,10 +1462,16 @@ function groupByMonth(list){
 /* Kolomvolgorde (vast, overal): Weeknummer | Datum | Dag | Jaar | Type | Bestemming | Enkele reis (km) | Retour | Totaal | Opmerkingen */
 const COLUMNS = ["Weeknummer","Datum","Dag","Jaar","Type","Bestemming","Enkele reis (km)","Retour","Totaal","Opmerkingen"];
 
+// In de Excel-export worden Enkele reis/Retour/Totaal alleen ingevuld voor dienstreizen;
+// woon-werkverkeer krijgt (net als thuiswerk e.d.) dezelfde lege lay-out voor die kolommen.
+const EXPORT_NO_KM_TYPES = [...NO_KM_TYPES, "woon"];
+function exportKm(item){
+  return EXPORT_NO_KM_TYPES.includes(item.type) ? 0 : computeKm(item);
+}
+
 function rowForItem(item){
-  const km = computeKm(item);
   const typeLabel = item.type === "overig" ? (item.overigLabel || "Overig") : TYPE_LABEL[item.type];
-  const noKm = NO_KM_TYPES.includes(item.type);
+  const noKm = EXPORT_NO_KM_TYPES.includes(item.type);
   return {
     "Weeknummer": isoWeekNumber(item.date),
     "Datum": fmtDateNL(item.date),
@@ -1475,7 +1481,7 @@ function rowForItem(item){
     "Bestemming": item.bestemming || "",
     "Enkele reis (km)": noKm ? "" : (item.km || 0),
     "Retour": noKm ? "" : (item.retour ? "Ja" : "Nee"),
-    "Totaal": noKm ? "" : km,
+    "Totaal": noKm ? "" : exportKm(item),
     "Opmerkingen": item.opmerking || ""
   };
 }
@@ -1505,7 +1511,7 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   const monthGroups = groupByMonth(list);
   const aoa = []; // array-of-arrays, opgebouwd met maandkoppen
   const merges = [];
-  const rowFills = []; // { row, type } voor achtergrondkleur per databregel
+  const rowFills = []; // { row, type, band } voor achtergrondkleur per databregel
 
   monthGroups.forEach(group => {
     // Maandkop-rij (samengevoegde cel over alle kolommen), met declaratiestatus
@@ -1519,17 +1525,22 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
     // Kolomkoppen
     aoa.push([...COLUMNS]);
 
-    // Databregels
+    // Databregels — kleurband wisselt per kalenderdag, zodat meerdere regels
+    // op dezelfde dag duidelijk bij elkaar horen (en losstaan van de volgende dag)
+    let band = false;
+    let prevKey = null;
     group.items.forEach(item => {
       const row = rowForItem(item);
-      if(item.type === "woon" || item.type === "thuis"){
-        rowFills.push({ row: aoa.length, type: item.type });
+      if(item.key !== prevKey){
+        band = !band;
+        prevKey = item.key;
       }
+      rowFills.push({ row: aoa.length, type: item.type, band });
       aoa.push(COLUMNS.map(c => row[c]));
     });
 
     // Maandtotaal
-    const mKm = group.items.reduce((s,i) => s + computeKm(i), 0);
+    const mKm = group.items.reduce((s,i) => s + exportKm(i), 0);
     aoa.push(["", "", "", "", "Totaal", "", "", "", mKm, summaryCountsText(group.items)]);
 
     // Lege regel tussen maanden
@@ -1538,7 +1549,7 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
 
   // Eindtotaal onderaan (alleen zinvol bij meer dan 1 maand)
   if(monthGroups.length > 1){
-    const totalKm = list.reduce((s,i) => s + computeKm(i), 0);
+    const totalKm = list.reduce((s,i) => s + exportKm(i), 0);
     merges.push({ s:{r:aoa.length,c:0}, e:{r:aoa.length,c:COLUMNS.length-1} });
     aoa.push(["EINDTOTAAL", ...Array(COLUMNS.length-1).fill("")]);
     aoa.push(["", "", "", "", "Totaal", "", "", "", totalKm, summaryCountsText(list)]);
@@ -1550,10 +1561,18 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   ];
   ws["!merges"] = merges;
 
-  // Achtergrondkleur per rij: geel voor woon-werk, groen voor thuiswerk
-  const FILL_COLOR = { woon: "FFF2A8", thuis: "C6E8B0" };
-  rowFills.forEach(({row, type}) => {
-    const color = FILL_COLOR[type];
+  // Achtergrondkleur per rij: geel voor woon-werk, groen voor thuiswerk — telkens in twee
+  // tinten die per kalenderdag wisselen (band true/false), overige types krijgen bij de
+  // "donkere" band een neutrale grijstint zodat dagen ook daar herkenbaar blijven.
+  const FILL_COLOR = {
+    woon:  { light: "FFF2A8", dark: "FFE066" },
+    thuis: { light: "C6E8B0", dark: "A9D18E" },
+    other: { light: null,     dark: "F0F0F0" }
+  };
+  rowFills.forEach(({row, type, band}) => {
+    const palette = FILL_COLOR[type] || FILL_COLOR.other;
+    const color = band ? palette.dark : palette.light;
+    if(!color) return;
     COLUMNS.forEach((c, colIdx) => {
       const ref = XLSX.utils.encode_cell({ r: row, c: colIdx });
       if(!ws[ref]) ws[ref] = { t: "s", v: "" };
