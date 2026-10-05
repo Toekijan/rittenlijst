@@ -1511,7 +1511,7 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   const monthGroups = groupByMonth(list);
   const aoa = []; // array-of-arrays, opgebouwd met maandkoppen
   const merges = [];
-  const rowFills = []; // { row, type, band } voor achtergrondkleur per databregel
+  const rowFills = []; // { row, type } voor achtergrondkleur per databregel
 
   monthGroups.forEach(group => {
     // Maandkop-rij (samengevoegde cel over alle kolommen), met declaratiestatus
@@ -1525,17 +1525,18 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
     // Kolomkoppen
     aoa.push([...COLUMNS]);
 
-    // Databregels — kleurband wisselt per kalenderdag, zodat meerdere regels
-    // op dezelfde dag duidelijk bij elkaar horen (en losstaan van de volgende dag)
-    let band = false;
-    let prevKey = null;
+    // Databregels — alle regels van dezelfde kalenderdag krijgen dezelfde kleur
+    // (op basis van het type van de eerste regel die dag); de eerstvolgende dag
+    // krijgt zijn eigen kleur, bepaald door zíjn type.
+    let dayKey = null;
+    let dayColorType = null;
     group.items.forEach(item => {
       const row = rowForItem(item);
-      if(item.key !== prevKey){
-        band = !band;
-        prevKey = item.key;
+      if(item.key !== dayKey){
+        dayKey = item.key;
+        dayColorType = item.type;
       }
-      rowFills.push({ row: aoa.length, type: item.type, band });
+      rowFills.push({ row: aoa.length, type: dayColorType });
       aoa.push(COLUMNS.map(c => row[c]));
     });
 
@@ -1561,17 +1562,12 @@ document.getElementById("exportExcelBtn").addEventListener("click", async () => 
   ];
   ws["!merges"] = merges;
 
-  // Achtergrondkleur per rij: geel voor woon-werk, groen voor thuiswerk — telkens in twee
-  // tinten die per kalenderdag wisselen (band true/false), overige types krijgen bij de
-  // "donkere" band een neutrale grijstint zodat dagen ook daar herkenbaar blijven.
-  const FILL_COLOR = {
-    woon:  { light: "FFF2A8", dark: "FFE066" },
-    thuis: { light: "C6E8B0", dark: "A9D18E" },
-    other: { light: null,     dark: "F0F0F0" }
-  };
-  rowFills.forEach(({row, type, band}) => {
-    const palette = FILL_COLOR[type] || FILL_COLOR.other;
-    const color = band ? palette.dark : palette.light;
+  // Achtergrondkleur per rij: geel voor woon-werk, groen voor thuiswerk, overige
+  // types geen kleur. Omdat dit per kalenderdag wordt bepaald (zie hierboven),
+  // krijgen alle regels van dezelfde dag automatisch dezelfde kleur.
+  const FILL_COLOR = { woon: "FFF2A8", thuis: "C6E8B0" };
+  rowFills.forEach(({row, type}) => {
+    const color = FILL_COLOR[type];
     if(!color) return;
     COLUMNS.forEach((c, colIdx) => {
       const ref = XLSX.utils.encode_cell({ r: row, c: colIdx });
