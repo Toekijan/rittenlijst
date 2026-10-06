@@ -326,9 +326,38 @@ textarea{resize:vertical;min-height:64px;font-family:inherit;}
   .toolbar{flex-direction:column;align-items:stretch;}
   .toolbar-group{justify-content:center;}
 }
+
+/* ===== Inloggen ===== */
+.login-screen{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--paper);}
+.login-screen[hidden]{display:none;}
+.login-box{width:100%;max-width:340px;background:var(--paper-raised);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 24px;display:flex;flex-direction:column;gap:12px;}
+.login-box h1{margin:0;font-size:26px;}
+.login-box p{margin:0;font-size:13px;color:var(--ink-soft);}
+.login-box label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px;}
+.login-box input{font:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;color:var(--ink);}
+.login-box input:focus{outline:2px solid var(--forest-soft);outline-offset:0;}
+.login-error{color:var(--stamp);font-size:13px;}
+.login-error[hidden]{display:none;}
+.user-line{margin-top:4px;}
+.user-line button{font:inherit;font-size:12px;background:none;border:none;padding:0;color:var(--ink-soft);text-decoration:underline;cursor:pointer;}
+.user-line button:hover{color:var(--ink);}
 </style>
 </head>
 <body>
+<div class="login-screen" id="loginScreen" hidden>
+  <form class="login-box" id="loginForm">
+    <h1>Reisregistratie</h1>
+    <p>Log in om je ritten te zien.</p>
+    <label>Gebruikersnaam
+      <input type="text" id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    </label>
+    <label>Wachtwoord
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+    </label>
+    <p class="login-error" id="loginError" hidden></p>
+    <button type="submit" class="btn btn-primary" id="loginSubmit">Inloggen</button>
+  </form>
+</div>
 <div class="wrap">
 
   <div class="masthead">
@@ -339,6 +368,7 @@ textarea{resize:vertical;min-height:64px;font-family:inherit;}
     </div>
     <div class="masthead-right" id="ytdSummary">
       <b id="ytdKm">0</b> km geregistreerd in <b id="ytdYear">—</b>
+      <div class="user-line">Ingelogd als <b id="currentUserName">—</b> &middot; <button type="button" id="logoutBtn">Uitloggen</button></div>
     </div>
   </div>
   <div class="ruler"></div>
@@ -561,20 +591,94 @@ textarea{resize:vertical;min-height:64px;font-family:inherit;}
 </div>
 
 <script>
+/* ============ Inloggen ============ */
+/*
+  Eerst wordt gecontroleerd of er een geldige sessie is; pas daarna start de app voor die gebruiker.
+  Zonder verbinding start de app met de laatst ingelogde gebruiker op de lokale cache.
+*/
 (function(){
+"use strict";
+const AUTH_URL = "/.netlify/functions/auth";
+const LAST_USER_KEY = "reisregistratie_last_user";
+const screen = document.getElementById("loginScreen");
+const form = document.getElementById("loginForm");
+const errorEl = document.getElementById("loginError");
+const submitBtn = document.getElementById("loginSubmit");
+
+function showLogin(message){
+  screen.hidden = false;
+  errorEl.textContent = message || "";
+  errorEl.hidden = !message;
+  document.getElementById("loginPassword").value = "";
+  document.getElementById(document.getElementById("loginUser").value ? "loginPassword" : "loginUser").focus();
+}
+
+function start(user){
+  try{ localStorage.setItem(LAST_USER_KEY, user); }catch(e){}
+  screen.hidden = true;
+  document.getElementById("currentUserName").textContent = user;
+  window.startApp(user, () => showLogin("Je sessie is verlopen. Log opnieuw in."));
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  submitBtn.disabled = true;
+  errorEl.hidden = true;
+  try{
+    const res = await fetch(AUTH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user: document.getElementById("loginUser").value,
+        password: document.getElementById("loginPassword").value
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){ showLogin(data.error || "Inloggen mislukt."); return; }
+    // Herladen geeft een schone start met de data van deze gebruiker.
+    location.reload();
+  }catch(err){
+    showLogin("Geen verbinding met de server.");
+  }finally{
+    submitBtn.disabled = false;
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  try{ await fetch(AUTH_URL + "?logout", { method: "POST" }); }catch(e){}
+  try{ localStorage.removeItem(LAST_USER_KEY); }catch(e){}
+  location.reload();
+});
+
+window.addEventListener("DOMContentLoaded", async () => {
+  try{
+    const res = await fetch(AUTH_URL, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){ showLogin(data.error || "Inloggen is tijdelijk niet beschikbaar."); return; }
+    if(data.loggedIn){ start(data.user); } else { showLogin(); }
+  }catch(err){
+    // Offline: werk verder met de laatst ingelogde gebruiker, als die er is.
+    let lastUser = null;
+    try{ lastUser = localStorage.getItem(LAST_USER_KEY); }catch(e){}
+    if(lastUser){ start(lastUser); } else { showLogin("Geen verbinding met de server."); }
+  }
+});
+})();
+</script>
+<script>
+window.startApp = function(currentUser, onUnauthorized){
 "use strict";
 
 /* ============ Data laag: cross-device sync via Netlify Blobs ============ */
 /*
   Werking:
-  - Alle data (entries + declaredMonths) staat in één record op de server (Netlify Function -> Netlify Blob).
-  - localStorage blijft bestaan als lokale cache: de app laadt direct (ook offline) met de laatst bekende data
-    en synchroniseert op de achtergrond met de server.
-  - Geen wachtwoord: bedoeld voor persoonlijk, single-user gebruik. Iedereen met de site-URL kan de data
-    lezen/wijzigen, dus deel de URL niet breder dan gewenst.
+  - Iedere gebruiker heeft een eigen record op de server (Netlify Function -> Netlify Blob),
+    alleen bereikbaar na inloggen.
+  - localStorage blijft bestaan als lokale cache per gebruiker: de app laadt direct (ook offline) met de
+    laatst bekende data en synchroniseert op de achtergrond met de server.
 */
-const STORAGE_KEY = "reisregistratie_entries_v1";
-const DECLARED_KEY = "reisregistratie_declared_v1";
+const STORAGE_KEY = "reisregistratie_entries_v1:" + currentUser;
+const DECLARED_KEY = "reisregistratie_declared_v1:" + currentUser;
 const API_URL = "/.netlify/functions/data";
 
 function migrateEntries(parsed){
@@ -635,8 +739,17 @@ function setSyncStatus(state){
 let syncInFlight = false;
 let pendingSync = false;
 
+// Sessie verlopen of account verwijderd: lokale wijzigingen blijven in de cache staan
+// en worden na opnieuw inloggen gesynchroniseerd.
+function handleUnauthorized(){
+  if(handleUnauthorized.done) return;
+  handleUnauthorized.done = true;
+  onUnauthorized();
+}
+
 async function fetchServerData(){
-  const res = await fetch(API_URL, { method: "GET" });
+  const res = await fetch(API_URL, { method: "GET", cache: "no-store" });
+  if(res.status === 401){ handleUnauthorized(); throw new Error("niet ingelogd"); }
   if(!res.ok){ throw new Error("server error " + res.status); }
   return res.json();
 }
@@ -647,6 +760,7 @@ async function pushServerData(){
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ entries, declaredMonths, updatedAt: Date.now() })
   });
+  if(res.status === 401){ handleUnauthorized(); throw new Error("niet ingelogd"); }
   if(!res.ok){ throw new Error("server error " + res.status); }
 }
 
@@ -1794,7 +1908,7 @@ renderCalendar();
 
 initialSyncFromServer();
 
-})();
+};
 
 </script>
 </body>

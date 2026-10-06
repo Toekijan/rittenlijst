@@ -1,6 +1,6 @@
 // Netlify Function: opslag en ophalen van reisregistratie-data via Netlify Blobs.
-// Geen authenticatie: bedoeld voor persoonlijk, single-user gebruik.
-// Iedereen die de site-URL kent kan de data lezen/wijzigen — deel de URL dus niet breder dan gewenst.
+// Alleen toegankelijk voor ingelogde gebruikers (zie netlify/lib/session.js); iedere gebruiker
+// heeft een eigen record onder de sleutel "users/<naam>".
 //
 // Let op (drag-and-drop deploys): bij een handmatige zip-upload geeft Netlify de Function niet
 // automatisch de site-context mee die Netlify Blobs nodig heeft. Daarom geven we siteID en token
@@ -10,9 +10,15 @@
 //   BLOBS_TOKEN     = een Personal Access Token (User settings -> Applications -> New access token)
 
 const { getStore } = require("@netlify/blobs");
+const session = require("../lib/session");
 
 const STORE_NAME = "reisregistratie";
-const BLOB_KEY = "data";
+// Sleutel van de gedeelde opslag van vóór de invoering van accounts.
+const LEGACY_BLOB_KEY = "data";
+
+function userKey(user) {
+  return `users/${user}`;
+}
 
 function getConfiguredStore() {
   const siteID = process.env.BLOBS_SITE_ID;
@@ -28,13 +34,12 @@ function getConfiguredStore() {
 exports.handler = async (event) => {
   const headers = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET, PUT, OPTIONS"
+    "Cache-Control": "no-store"
   };
 
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers, body: "" };
+  const user = session.currentUser(event);
+  if (!user) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: "Niet ingelogd." }) };
   }
 
   let store;
@@ -53,7 +58,15 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const data = await store.get(BLOB_KEY, { type: "json" });
+      let data = await store.get(userKey(user), { type: "json" });
+      // Eenmalige migratie: de eigenaar neemt de ritten uit de oude gedeelde opslag over.
+      if (!data && user === session.getOwner()) {
+        const legacy = await store.get(LEGACY_BLOB_KEY, { type: "json" });
+        if (legacy) {
+          await store.setJSON(userKey(user), legacy);
+          data = legacy;
+        }
+      }
       return {
         statusCode: 200,
         headers,
@@ -73,7 +86,7 @@ exports.handler = async (event) => {
         declaredMonths: payload.declaredMonths || {},
         updatedAt: payload.updatedAt || Date.now()
       };
-      await store.setJSON(BLOB_KEY, record);
+      await store.setJSON(userKey(user), record);
       return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
     }
 

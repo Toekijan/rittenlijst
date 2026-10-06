@@ -2,8 +2,34 @@
 
 Webapp om reisafstanden voor werk bij te houden. De registraties synchroniseren
 automatisch tussen al je apparaten (telefoon, laptop, thuis-pc) via **Netlify Blobs**.
-Geen inlogscherm, geen wachtwoord — zodra je de app op een apparaat opent, ziet en
-bewerkt hij dezelfde dataset.
+Meerdere mensen kunnen de app gebruiken: iedereen logt in met een eigen
+gebruikersnaam en wachtwoord en ziet alleen de eigen ritten.
+
+## Accounts instellen (verplicht)
+
+Zonder deze twee environment variables kan niemand inloggen. Stel ze in via
+Netlify → **Site configuration → Environment variables → Add a variable**:
+
+| Variabele        | Waarde                                                                 |
+|------------------|------------------------------------------------------------------------|
+| `RITTEN_USERS`   | Accounts als `naam:wachtwoord`, gescheiden door komma's. Bijv. `benito:Zomer-Fiets-42,piet:Rood-Kanaal-17` |
+| `SESSION_SECRET` | Een lange willekeurige tekst (minstens 32 tekens). Niemand hoeft die te onthouden. |
+
+Daarna **Deploys → Trigger deploy → Deploy site**: environment variables worden pas
+actief na een nieuwe deploy.
+
+- **Iemand toevoegen**: zet `,naam:wachtwoord` achter `RITTEN_USERS` en deploy opnieuw.
+  Geef die persoon de site-URL, de naam en het wachtwoord.
+- **Iemand verwijderen**: haal de naam uit `RITTEN_USERS` en deploy opnieuw. Die persoon
+  kan direct niet meer inloggen. De ritten blijven bewaard; zet je de naam terug, dan
+  zijn ze er weer.
+- **Wachtwoord wijzigen**: pas het aan in `RITTEN_USERS` en deploy opnieuw.
+- **Iedereen uitloggen**: wijzig `SESSION_SECRET` en deploy opnieuw.
+- Namen mogen letters, cijfers, punt, streepje en liggend streepje bevatten
+  (hoofdletters maken niet uit). Wachtwoorden mogen geen komma bevatten.
+- **De eerste naam in de lijst is de eigenaar**: die krijgt bij de eerste keer inloggen
+  de ritten die al in de app stonden van vóór de invoering van accounts.
+- Een sessie blijft 30 dagen geldig; daarna vraagt de app opnieuw om in te loggen.
 
 ## Deployen via GitHub (aanbevolen)
 
@@ -22,18 +48,21 @@ Eenmalige koppeling:
    - Functions directory: `netlify/functions`
 5. **Deploy site**.
 
-Daarna geldt: `git push` → Netlify bouwt → site is live. Je hoeft **geen**
-environment variables in te stellen; bij een Git-deploy geeft Netlify de
-site-context voor Blobs automatisch mee.
+Daarna geldt: `git push` → Netlify bouwt → site is live. Voor de opslag hoef je
+geen extra environment variables in te stellen; bij een Git-deploy geeft Netlify de
+site-context voor Blobs automatisch mee. De accounts moet je wel instellen (zie
+hierboven).
 
 ### Controleren of het werkt
 
 Open `https://JOUW-SITE.netlify.app/.netlify/functions/data` in de browser.
-Je moet JSON zien, bijvoorbeeld:
+Ben je ingelogd, dan zie je JSON met je ritten, bijvoorbeeld:
 
 ```json
 {"entries":{},"declaredMonths":{},"updatedAt":null}
 ```
+
+Niet ingelogd? Dan zie je `{"error":"Niet ingelogd."}`. Dat hoort zo.
 
 Krijg je in plaats daarvan een foutmelding, kijk dan in Netlify bij
 **Deploys → (laatste deploy) → Functions** naar de log van `data`.
@@ -64,13 +93,16 @@ reisregistratie/
 ├── netlify.toml                   ← Netlify-configuratie
 ├── package.json                   ← dependency: @netlify/blobs
 └── netlify/
+    ├── lib/
+    │   └── session.js             ← accounts en sessiecookies
     └── functions/
+        ├── auth.js                ← inloggen / uitloggen
         └── data.js                ← serverless functie die data opslaat/ophaalt
 ```
 
 ## Gebruik
 
-Open de site-URL op elk apparaat. De eerste keer wordt de lokale (mogelijk lege)
+Open de site-URL op elk apparaat en log in. De eerste keer wordt de lokale (mogelijk lege)
 data naar de server gestuurd als startpunt; daarna haalt elk apparaat bij het
 openen de laatste stand op en synchroniseert elke wijziging automatisch terug.
 Rechtsonder zie je kort een statusindicatie ("Synchroniseren…" / "✓ Gesynchroniseerd").
@@ -79,8 +111,11 @@ zodra je weer verbinding hebt.
 
 ## Belangrijk om te weten
 
-- **Geen toegangsbeveiliging op de app zelf.** Iedereen die de site-URL kent, kan
-  de data lezen en wijzigen. Deel de link dus niet publiekelijk.
+- **Alleen ingelogde gebruikers** kunnen data lezen of wijzigen, en alleen hun eigen
+  ritten. Als beheerder van Netlify kun jij de wachtwoorden in `RITTEN_USERS` zien:
+  laat mensen dus geen wachtwoord gebruiken dat ze ook elders gebruiken.
+- Iemand die uitlogt op een gedeeld apparaat, laat een lokale kopie van de eigen ritten
+  achter in de browser. Die is alleen zichtbaar voor wie op hetzelfde account inlogt.
 - Zet de GitHub-repository op **private** als je de data-structuur niet publiek
   wilt hebben. De Netlify-koppeling blijft dan gewoon werken.
 - **De Personal Access Token (alleen nodig bij drag-and-drop) is gevoelig** —
