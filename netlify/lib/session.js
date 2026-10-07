@@ -50,12 +50,25 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+function verifyPassword(password, stored) {
+  if (stored.startsWith("pbkdf2$")) {
+    const [, iter, salt, hash] = stored.split("$");
+    const rounds = Number(iter);
+    if (!salt || !hash || !(rounds >= 10000 && rounds <= 1000000)) return false;
+    const derived = crypto
+      .pbkdf2Sync(String(password), Buffer.from(salt, "base64url"), rounds, 32, "sha256")
+      .toString("base64url");
+    return safeEqual(derived, hash);
+  }
+  return safeEqual(password, stored); // oude opzet: gewoon wachtwoord
+}
+
 // Geeft de genormaliseerde gebruikersnaam terug bij een juiste combinatie, anders null.
 function checkCredentials(name, password) {
   const user = String(name || "").trim().toLowerCase();
   const expected = getUsers().get(user);
   // Altijd vergelijken, ook bij onbekende naam, zodat de responstijd niets verraadt.
-  const ok = safeEqual(password || "", expected || crypto.randomBytes(16).toString("hex"));
+  const ok = verifyPassword(password || "", expected || crypto.randomBytes(16).toString("hex"));
   return ok && expected ? user : null;
 }
 
